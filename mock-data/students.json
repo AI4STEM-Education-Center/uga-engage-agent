@@ -1,0 +1,282 @@
+[
+  {
+    "id": "s01",
+    "name": "Student 1",
+    "answers": {
+      "gravityDefinition": "Gravity is the force that pulls objects toward Earth or another planet. It makes things fall down instead of floating.",
+      "everydayExample": "When I drop my water bottle, it falls to the floor. That is gravity pulling it down.",
+      "fallingObjects": "I think the heavier book will hit first because it is heavier, but the air might slow the notebook.",
+      "directionOfGravity": "Gravity pulls down toward the ground because things always fall toward the floor.",
+      "massVsWeight": "Mass is how much matter something has, weight is how heavy it feels because of gravity.",
+      "spaceQuestion": "On the Moon there is less gravity, so you can jump higher and fall slower.",
+      "confidence": "A little confident",
+      "confusion": "Not sure how gravity works in space with no air."
+    }
+  },
+  {
+    "id": "s02",
+    "name": "Student 2",
+    "answers": {
+      "gravityDefinition": "Gravity is a pull between objects with mass that brings them together.",
+      "everydayExample": "A basketball comes back down after you shoot it.",
+      "fallingObjects": "They should hit at the same time if air is not a factor, but in air the feather falls slower.",
+      "directionOfGravity": "Toward the center of Earth. You know because everything falls down no matter where you stand.",
+      "massVsWeight": "Mass stays the same, weight changes if gravity changes.",
+      "spaceQuestion": "In space you feel weightless because there is little gravity or you are in free fall.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s03",
+    "name": "Student 3",
+    "answers": {
+      "gravityDefinition": "Gravity is like a magnet that pulls things down to Earth.",
+      "everydayExample": "If I jump, I always come back down.",
+      "fallingObjects": "The heavy book falls faster because it has more gravity.",
+      "directionOfGravity": "Down toward the ground because Earth pulls on objects.",
+      "massVsWeight": "Mass is the amount of stuff, weight is how heavy it is on Earth.",
+      "spaceQuestion": "On the Moon there is almost no gravity so things float.",
+      "confidence": "Not confident",
+      "confusion": "I do not get why heavier things fall faster or slower."
+    }
+  },
+  {
+    "id": "s04",
+    "name": "Student 4",
+    "answers": {
+      "gravityDefinition": "Gravity is a force between masses that causes attraction.",
+      "everydayExample": "Rain falls from clouds to the ground.",
+      "fallingObjects": "Both should fall together in a vacuum, but air resistance makes the feather slow.",
+      "directionOfGravity": "Toward Earth's center.",
+      "massVsWeight": "Weight is the force of gravity on mass.",
+      "spaceQuestion": "In space you are still affected by gravity but you are in orbit so you float.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s05",
+    "name": "Student 5",
+    "answers": {
+      "gravityDefinition": "Gravity is what makes objects fall and keeps planets in orbit.",
+      "everydayExample": "My phone falls off the couch if it is near the edge.",
+      "fallingObjects": "The heavier book will fall first because it has more weight.",
+      "directionOfGravity": "Down, toward Earth.",
+      "massVsWeight": "Mass is constant, weight depends on gravity.",
+      "spaceQuestion": "On the Moon gravity is weaker so you weigh less.",
+      "confidence": "A little confident",
+      "confusion": "I wonder why gravity keeps the Moon around Earth."
+    }
+  },
+  {
+    "id": "s06",
+    "name": "Student 6",
+    "answers": {
+      "gravityDefinition": "Gravity is the force pulling objects toward each other.",
+      "everydayExample": "When I ride a bike downhill, I speed up because of gravity.",
+      "fallingObjects": "If air resistance is small, they hit together, but in air the lighter one is slower.",
+      "directionOfGravity": "Toward the center of the planet.",
+      "massVsWeight": "Weight is mass times gravity, mass is how much matter.",
+      "spaceQuestion": "There is still gravity in space, but astronauts are falling around Earth.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s07",
+    "name": "Student 7",
+    "answers": {
+      "gravityDefinition": "Gravity pulls things down so they do not float away.",
+      "everydayExample": "A ball rolls back down a hill.",
+      "fallingObjects": "The heavy book falls faster because it is heavier.",
+      "directionOfGravity": "Down to the floor.",
+      "massVsWeight": "I think mass and weight are basically the same.",
+      "spaceQuestion": "In space there is no gravity so everything floats.",
+      "confidence": "Not confident",
+      "confusion": "Not sure why astronauts float."
+    }
+  },
+  {
+    "id": "s08",
+    "name": "Student 8",
+    "answers": {
+      "gravityDefinition": "Gravity is a force of attraction between masses like Earth and you.",
+      "everydayExample": "Throwing a ball up and it comes down.",
+      "fallingObjects": "They should land at the same time if you ignore air.",
+      "directionOfGravity": "Toward the center of Earth.",
+      "massVsWeight": "Mass is how much matter; weight depends on gravity.",
+      "spaceQuestion": "On the Moon, gravity is weaker so you can jump higher.",
+      "confidence": "A little confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s09",
+    "name": "Student 9",
+    "answers": {
+      "gravityDefinition": "Gravity is a pulling force that makes objects fall.",
+      "everydayExample": "Rain falls from the sky to the ground.",
+      "fallingObjects": "Heavier objects fall faster because they have more gravity.",
+      "directionOfGravity": "Down toward the ground.",
+      "massVsWeight": "Mass is how big something is, weight is how heavy it is on Earth.",
+      "spaceQuestion": "In space there is no gravity so you float.",
+      "confidence": "Not confident",
+      "confusion": "I do not understand how gravity works in space."
+    }
+  },
+  {
+    "id": "s10",
+    "name": "Student 10",
+    "answers": {
+      "gravityDefinition": "Gravity is a force that attracts objects to each other.",
+      "everydayExample": "When I drop my keys they fall to the ground.",
+      "fallingObjects": "In a vacuum they land at the same time, in air the feather is slower.",
+      "directionOfGravity": "Toward Earth’s center.",
+      "massVsWeight": "Weight is the force of gravity on mass.",
+      "spaceQuestion": "On the Moon gravity is weaker so things are lighter.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s11",
+    "name": "Student 11",
+    "answers": {
+      "gravityDefinition": "Gravity keeps us on the ground and makes things fall.",
+      "everydayExample": "A swing moves back down after being pushed.",
+      "fallingObjects": "The heavier book falls faster because it is heavier.",
+      "directionOfGravity": "Downward, toward Earth.",
+      "massVsWeight": "Mass is how much stuff, weight is heaviness.",
+      "spaceQuestion": "In space there is no gravity so people float.",
+      "confidence": "A little confident",
+      "confusion": "Not sure about gravity if there is no air."
+    }
+  },
+  {
+    "id": "s12",
+    "name": "Student 12",
+    "answers": {
+      "gravityDefinition": "Gravity is the pull from Earth that causes acceleration downward.",
+      "everydayExample": "A pencil falls off the desk.",
+      "fallingObjects": "They fall together unless air resistance changes it.",
+      "directionOfGravity": "Toward the center of Earth.",
+      "massVsWeight": "Weight is mass times gravity.",
+      "spaceQuestion": "There is still gravity in space, but orbit feels like free fall.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s13",
+    "name": "Student 13",
+    "answers": {
+      "gravityDefinition": "Gravity is a force that pulls everything down.",
+      "everydayExample": "Snow falls from the sky.",
+      "fallingObjects": "The book hits first because it is heavier.",
+      "directionOfGravity": "Down to the ground.",
+      "massVsWeight": "They are the same thing.",
+      "spaceQuestion": "No gravity in space so you float.",
+      "confidence": "Not confident",
+      "confusion": "I do not get what gravity is made of."
+    }
+  },
+  {
+    "id": "s14",
+    "name": "Student 14",
+    "answers": {
+      "gravityDefinition": "Gravity is an attractive force between objects.",
+      "everydayExample": "Jumping on a trampoline and coming back down.",
+      "fallingObjects": "They should land together if air is not slowing one.",
+      "directionOfGravity": "Toward Earth’s center.",
+      "massVsWeight": "Weight depends on gravity; mass does not.",
+      "spaceQuestion": "On the Moon gravity is less, so you weigh less.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s15",
+    "name": "Student 15",
+    "answers": {
+      "gravityDefinition": "Gravity is the force that pulls objects down to Earth.",
+      "everydayExample": "A soccer ball falls after you kick it up.",
+      "fallingObjects": "Heavy objects fall faster because they have more weight.",
+      "directionOfGravity": "Down toward the ground.",
+      "massVsWeight": "Mass is amount of matter, weight is how heavy it feels.",
+      "spaceQuestion": "In space there is no gravity and everything floats.",
+      "confidence": "A little confident",
+      "confusion": "Not sure why air changes falling."
+    }
+  },
+  {
+    "id": "s16",
+    "name": "Student 16",
+    "answers": {
+      "gravityDefinition": "Gravity is a force that attracts objects to each other.",
+      "everydayExample": "A roller coaster goes down because of gravity.",
+      "fallingObjects": "They should hit together in a vacuum, but air slows the feather.",
+      "directionOfGravity": "Toward the center of Earth.",
+      "massVsWeight": "Weight is the force of gravity on mass.",
+      "spaceQuestion": "There is still gravity in space but you feel weightless in orbit.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s17",
+    "name": "Student 17",
+    "answers": {
+      "gravityDefinition": "Gravity keeps us grounded and pulls objects down.",
+      "everydayExample": "Dropping a pen and it falls.",
+      "fallingObjects": "The heavier book falls faster because of more gravity.",
+      "directionOfGravity": "Down, toward Earth.",
+      "massVsWeight": "Mass is how much stuff, weight is how heavy it is on Earth.",
+      "spaceQuestion": "There is no gravity in space so people float.",
+      "confidence": "Not confident",
+      "confusion": "Not sure how gravity works without air."
+    }
+  },
+  {
+    "id": "s18",
+    "name": "Student 18",
+    "answers": {
+      "gravityDefinition": "Gravity is a force that pulls objects toward a planet.",
+      "everydayExample": "If I toss a coin, it comes back down.",
+      "fallingObjects": "They land together in a vacuum; air makes the feather slower.",
+      "directionOfGravity": "Toward Earth's center.",
+      "massVsWeight": "Mass is amount of matter, weight changes with gravity.",
+      "spaceQuestion": "On the Moon you weigh less because gravity is weaker.",
+      "confidence": "A little confident",
+      "confusion": ""
+    }
+  },
+  {
+    "id": "s19",
+    "name": "Student 19",
+    "answers": {
+      "gravityDefinition": "Gravity is the force that makes objects fall toward Earth.",
+      "everydayExample": "Water falls out of a cup if you tip it over.",
+      "fallingObjects": "The book falls faster because it is heavier.",
+      "directionOfGravity": "Down to the ground.",
+      "massVsWeight": "Mass is how much matter, weight is how heavy it is.",
+      "spaceQuestion": "In space there is zero gravity so you float.",
+      "confidence": "Not confident",
+      "confusion": "Not sure what happens to gravity in space."
+    }
+  },
+  {
+    "id": "s20",
+    "name": "Student 20",
+    "answers": {
+      "gravityDefinition": "Gravity is an attractive force between objects with mass.",
+      "everydayExample": "A book falls off a table.",
+      "fallingObjects": "They should fall together if you remove air resistance.",
+      "directionOfGravity": "Toward Earth's center.",
+      "massVsWeight": "Weight is the force of gravity; mass is how much matter.",
+      "spaceQuestion": "Astronauts float because they are in orbit and free fall.",
+      "confidence": "Very confident",
+      "confusion": ""
+    }
+  }
+]
