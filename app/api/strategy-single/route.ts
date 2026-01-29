@@ -24,10 +24,6 @@ type Plan = {
 
 export const runtime = "nodejs";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const buildPrompt = (answers: Answers) => ({
   system: `You are an education engagement planner.
 Return JSON only with keys: name, strategy, relevance, summary, rationale, tactics, cadence, checks.
@@ -75,6 +71,7 @@ const ensureRelevance = (plan: Plan) => {
 };
 
 export async function POST(request: Request) {
+  console.info("OPENAI_API_KEY is set:", Boolean(process.env.OPENAI_API_KEY));
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "OPENAI_API_KEY is not set." },
@@ -83,6 +80,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const { student } = (await request.json()) as { student: Student };
     if (!student?.id) {
       return NextResponse.json(

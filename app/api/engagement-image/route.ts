@@ -18,10 +18,6 @@ type ContentItem = {
   body: string;
 };
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const buildPrompt = (item: ContentItem, plan: Plan | null, answers: Answers) => {
   const topic = answers.topic?.trim() || "gravity";
   const gradeLevel = "8th grade";
@@ -38,6 +34,7 @@ Style: clean, minimal, classroom-friendly, no text labels.`;
 };
 
 export async function POST(request: Request) {
+  console.info("OPENAI_API_KEY is set:", Boolean(process.env.OPENAI_API_KEY));
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "OPENAI_API_KEY is not set." },
@@ -46,6 +43,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const { item, plan, answers = {} } = (await request.json()) as {
       item: ContentItem;
       plan: Plan | null;

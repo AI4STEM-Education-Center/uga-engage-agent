@@ -3,10 +3,6 @@ import { NextResponse } from "next/server";
 
 type Answers = Record<string, string | undefined>;
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const buildPrompt = (
   answers: Answers,
   cohortDistribution?: Record<string, number>,
@@ -49,6 +45,7 @@ const parseJson = (value: string | null | undefined) => {
 };
 
 export async function POST(request: Request) {
+  console.info("OPENAI_API_KEY is set:", Boolean(process.env.OPENAI_API_KEY));
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "OPENAI_API_KEY is not set." },
@@ -57,6 +54,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const { answers = {}, cohortDistribution, cohortStudents } =
       (await request.json()) as {
         answers?: Answers;
