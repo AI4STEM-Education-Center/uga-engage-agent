@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       size: "1024x1024",
     });
 
-    const data = result.data[0];
+    const data = result.data?.[0];
     const base64 = data?.b64_json;
     const url = data?.url;
     if (!base64 && !url) {
