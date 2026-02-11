@@ -58,7 +58,6 @@ export async function POST(request: Request) {
       model,
       prompt,
       size: "1024x1024",
-      response_format: "url",
     });
 
     const data = result.data?.[0];
