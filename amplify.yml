@@ -6,6 +6,11 @@ frontend:
         - npm ci
     build:
       commands:
+        - echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> .env.production
+        - echo "DYNAMODB_TABLE=$DYNAMODB_TABLE" >> .env.production
+        - echo "ENGAGE_AWS_REGION=$ENGAGE_AWS_REGION" >> .env.production
+        - echo "ENGAGE_AWS_ACCESS_KEY_ID=$ENGAGE_AWS_ACCESS_KEY_ID" >> .env.production
+        - echo "ENGAGE_AWS_SECRET_ACCESS_KEY=$ENGAGE_AWS_SECRET_ACCESS_KEY" >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
