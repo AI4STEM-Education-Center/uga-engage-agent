@@ -185,7 +185,7 @@ export const upsertCachedPlanJson = async (
           [skField]: `PLAN#SESSION#${sessionId}#STUDENT#${studentId}#LATEST`,
           record_type: "plan_cache",
           session_id: sessionId,
-          student_id: studentId,
+          // GSI keys: student_id (PK) and student_record_id (SK); plain ID extracted via STUDENT# prefix when reading
           [gsiStudentPkField]: `STUDENT#${studentId}`,
           [gsiStudentSkField]: `PLAN#SESSION#${sessionId}#LATEST`,
           plan_json: planJson,
@@ -330,8 +330,6 @@ export const recordTeacherAnnotation = async (
         Item: {
           record_type: "teacher_annotation",
           // Use a stable partition since UI no longer collects IDs.
-          class_id: partition,
-          record_id: `ANNOTATION#${annotationId}`,
           [pkField]: `CLASS#${partition}`,
           [skField]: `ANNOTATION#${annotationId}`,
           ...record,
