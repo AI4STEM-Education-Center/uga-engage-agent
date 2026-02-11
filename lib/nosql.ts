@@ -43,8 +43,10 @@ const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "engage-nosql.json");
 
 const useDynamoDb = Boolean(process.env.DYNAMODB_TABLE);
-const dynamoRegion = process.env.AWS_REGION;
+const dynamoRegion = process.env.ENGAGE_AWS_REGION;
 const dynamoTableName = process.env.DYNAMODB_TABLE ?? "";
+const dynamoAccessKeyId = process.env.ENGAGE_AWS_ACCESS_KEY_ID;
+const dynamoSecretAccessKey = process.env.ENGAGE_AWS_SECRET_ACCESS_KEY;
 const pkField = "class_id";
 const skField = "record_id";
 const gsiTeacherPkField = "teacher_id";
@@ -63,13 +65,22 @@ const getDynamoClient = () => {
     return null;
   }
   if (!dynamoRegion) {
-    throw new Error("AWS_REGION is required when using DynamoDB.");
+    throw new Error("ENGAGE_AWS_REGION is required when using DynamoDB.");
   }
   if (!dynamoTableName) {
     throw new Error("DYNAMODB_TABLE is required when using DynamoDB.");
   }
   if (!dynamoDocClient) {
-    const client = new DynamoDBClient({ region: dynamoRegion });
+    const client = new DynamoDBClient({
+      region: dynamoRegion,
+      ...(dynamoAccessKeyId &&
+        dynamoSecretAccessKey && {
+          credentials: {
+            accessKeyId: dynamoAccessKeyId,
+            secretAccessKey: dynamoSecretAccessKey,
+          },
+        }),
+    });
     dynamoDocClient = DynamoDBDocumentClient.from(client, {
       marshallOptions: { removeUndefinedValues: true },
     });

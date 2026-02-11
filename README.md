@@ -38,7 +38,10 @@ OPENAI_MODEL=gpt-5-nano
 OPENAI_IMAGE_MODEL=gpt-image-1
 
 # Optional DynamoDB cache (uses local JSON store if not set)
-AWS_REGION=us-east-1
+# Use ENGAGE_ prefix to avoid Next.js reserved "AWS" prefix
+ENGAGE_AWS_REGION=us-east-1
+ENGAGE_AWS_ACCESS_KEY_ID=your_access_key
+ENGAGE_AWS_SECRET_ACCESS_KEY=your_secret_key
 DYNAMODB_TABLE=engage_strategy_cache
 ```
 
