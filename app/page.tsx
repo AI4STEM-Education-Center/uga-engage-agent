@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import mockStudents from "@/mock-data/students.json";
 
@@ -10,7 +10,10 @@ type Plan = {
   name: string;
   strategy: string;
   relevance: Record<string, number>;
+  overallRecommendation: string;
+  recommendationReason: string;
   summary: string;
+  tldr: string;
   rationale: string;
   tactics: string[];
   cadence: string;
@@ -22,6 +25,7 @@ type ContentItem = {
   type: string;
   title: string;
   body: string;
+  strategy: string;
 };
 
 type ImageState = {
@@ -42,63 +46,23 @@ type StudentStrategyResult = {
   plan: Plan;
 };
 
+const assignmentLabel =
+  "Gravity warm-up: explain gravity + describe a real-life gravity experience.";
+
 const questions = [
   {
-    id: "gravityDefinition",
+    id: "conceptUnderstanding",
     label:
-      "In your own words, what is gravity? Describe it as if you were teaching a friend.",
+      "In your own words, how would you explain gravity right now?",
     type: "textarea",
     placeholder: "Write 2-4 sentences.",
   },
   {
-    id: "everydayExample",
+    id: "pastExperiences",
     label:
-      "Think about a time you noticed gravity in real life. What happened?",
+      "Describe a past experience where you noticed gravity in real life.",
     type: "textarea",
     placeholder: "Example: dropping a ball, jumping, riding a swing.",
-  },
-  {
-    id: "fallingObjects",
-    label:
-      "If you drop a heavy book and a light notebook at the same time, what do you think will happen? Why?",
-    type: "textarea",
-    placeholder: "Explain your reasoning.",
-  },
-  {
-    id: "directionOfGravity",
-    label:
-      "Which direction does gravity pull objects, and how do you know?",
-    type: "text",
-    placeholder: "One or two sentences.",
-  },
-  {
-    id: "massVsWeight",
-    label:
-      "What do you think is the difference between mass and weight?",
-    type: "textarea",
-    placeholder: "Use your own words.",
-  },
-  {
-    id: "spaceQuestion",
-    label:
-      "What do you think happens to gravity on the Moon or in space? Why?",
-    type: "textarea",
-    placeholder: "Share what you believe and why.",
-  },
-  {
-    id: "confidence",
-    label:
-      "How confident do you feel about understanding gravity right now?",
-    type: "select",
-    options: ["Not confident", "A little confident", "Very confident"],
-  },
-  {
-    id: "confusion",
-    label:
-      "Is there anything about gravity that feels confusing or surprising? (optional)",
-    type: "textarea",
-    placeholder: "It is okay to say 'not sure' or leave blank.",
-    optional: true,
   },
 ];
 
@@ -175,8 +139,6 @@ const strategies = [
 ];
 
 export default function Home() {
-  const [answers, setAnswers] = useState<Answers>({});
-  const [submitted, setSubmitted] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [images, setImages] = useState<Record<string, ImageState>>({});
@@ -184,11 +146,22 @@ export default function Home() {
     url: string;
     title: string;
   } | null>(null);
+  const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
+  const [classId] = useState("physics-1a");
+  const [sessionId] = useState("week-03");
+  const [annotationDecision, setAnnotationDecision] = useState<
+    "agree" | "disagree" | null
+  >(null);
+  const [annotationReason, setAnnotationReason] = useState("");
+  const [annotationStatus, setAnnotationStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
   const [mockIndex, setMockIndex] = useState(0);
-  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [loadingContent, setLoadingContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
   const [cohortResults, setCohortResults] = useState<StudentStrategyResult[]>(
     [],
   );
@@ -203,28 +176,16 @@ export default function Home() {
   }>({ processed: 0, total: 0, currentName: "" });
   const [showStudentRecommendations, setShowStudentRecommendations] =
     useState(false);
-
   const mockStudentList = mockStudents as MockStudent[];
   const currentMock = mockStudentList[mockIndex];
-
-  const completion = useMemo(() => {
-    const requiredIds = questions
-      .filter((question) => !question.optional)
-      .map((question) => question.id);
-    const answered = requiredIds.filter((id) => answers[id]?.trim()).length;
-    return Math.round((answered / requiredIds.length) * 100);
-  }, [answers]);
-
-  const handleChange = (id: string, value: string) => {
-    setAnswers((prev) => ({ ...prev, [id]: value }));
-    setSubmitted(false);
-    setError(null);
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitted(true);
-  };
+  const getStrategyLabel = (strategyId: string) =>
+    strategies.find((strategy) => strategy.id === strategyId)?.label ??
+    strategyId;
+  const stepLabels = [
+    "Student questionnaire",
+    "Strategy recommendation",
+    "Content generation",
+  ];
 
   const requestPlan = async () => {
     setLoadingPlan(true);
@@ -235,17 +196,34 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          answers,
+          answers: currentMock?.answers ?? {},
+          studentName: currentMock?.name ?? null,
+          studentId: currentMock?.id ?? null,
+          assignment: assignmentLabel,
+          classId: classId.trim(),
+          sessionId: sessionId.trim(),
           cohortDistribution,
-          cohortStudents: mockStudentList,
+          cohortStudents: mockStudentList.map((student) => ({
+            ...student,
+            assignment: assignmentLabel,
+          })),
         }),
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data?.error ?? "Failed to create engagement plan.");
       }
+      if (data.cached) {
+        console.info("Plan loaded from cache — no OpenAI call needed.");
+      }
       setPlan(data.plan);
+      setSelectedStrategies([data.plan.strategy]);
+      setAnnotationDecision(null);
+      setAnnotationReason("");
+      setAnnotationStatus("idle");
+      setAnnotationError(null);
       setContent([]);
+      setCurrentStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error.");
     } finally {
@@ -254,7 +232,7 @@ export default function Home() {
   };
 
   const requestContent = async () => {
-    if (!plan) {
+    if (!plan || selectedStrategies.length === 0) {
       return;
     }
     setLoadingContent(true);
@@ -264,7 +242,7 @@ export default function Home() {
       const response = await fetch("/api/engagement-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers, plan }),
+        body: JSON.stringify({ answers: currentMock?.answers ?? {}, plan, selectedStrategies }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -273,11 +251,12 @@ export default function Home() {
       const items = (data.items ?? []).map(
         (item: Omit<ContentItem, "id">, index: number) => ({
           ...item,
-          id: `${index}-${item.title}`,
+          id: `${item.strategy ?? "strategy"}-${index}-${item.title}`,
         }),
       );
       setContent(items);
       setImages({});
+      setCurrentStep(3);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error.");
     } finally {
@@ -286,6 +265,10 @@ export default function Home() {
   };
 
   const requestCohortAnalysis = async () => {
+    if (!classId.trim() || !sessionId.trim()) {
+      setError("Class ID and session ID are required for cohort analysis.");
+      return;
+    }
     setLoadingCohort(true);
     setError(null);
     setCohortResults([]);
@@ -293,21 +276,92 @@ export default function Home() {
     setCohortProgress({
       processed: 0,
       total: mockStudentList.length,
-      currentName: "",
+      currentName: "Loading cache...",
     });
     try {
+      /* ---- 1. Fetch all cached plans for this session in one call ---- */
+      const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId.trim())}&sessionId=${encodeURIComponent(sessionId.trim())}`;
+      const cacheResponse = await fetch(cacheUrl);
+      let cacheData: { results?: Array<{ studentId?: string; plan?: unknown }>; error?: string } = { results: [] };
+      if (cacheResponse.ok) {
+        cacheData = await cacheResponse.json();
+      } else {
+        const errBody = await cacheResponse.json().catch(() => ({}));
+        console.warn("Strategy cache fetch failed:", cacheResponse.status, errBody?.error ?? cacheResponse.statusText);
+      }
+      const cachedMap = new Map<string, Plan>();
+      for (const entry of cacheData.results ?? []) {
+        if (entry.studentId && entry.plan) {
+          cachedMap.set(entry.studentId, entry.plan as Plan);
+        }
+      }
+      const cachedCount = cachedMap.size;
+
+      /* ---- 2. Fast path: all cached — build results in one shot, no loop ---- */
+      if (cachedCount === mockStudentList.length) {
+        const results: StudentStrategyResult[] = mockStudentList.map((s) => ({
+          id: s.id,
+          name: s.name,
+          plan: cachedMap.get(s.id)!,
+        }));
+        const distribution: Record<string, number> = {};
+        results.forEach((r) => {
+          const key = r.plan.strategy;
+          distribution[key] = (distribution[key] ?? 0) + 1;
+        });
+        setCohortResults(results);
+        setCohortDistribution(distribution);
+        setCohortProgress({
+          processed: mockStudentList.length,
+          total: mockStudentList.length,
+          currentName: "",
+        });
+        console.info(`Cohort: all ${cachedCount} students loaded from cache.`);
+        return;
+      }
+
+      if (cachedCount > 0) {
+        console.info(
+          `Cohort: ${cachedCount} from cache, ${mockStudentList.length - cachedCount} need generation.`,
+        );
+      } else {
+        console.warn(
+          `Cohort: cache empty for classId=${classId} sessionId=${sessionId}. Generating all ${mockStudentList.length} students.`,
+        );
+      }
+
+      /* ---- 3. Mixed or empty cache — loop, generate only for misses ---- */
       const results: StudentStrategyResult[] = [];
+      const generatingLabel =
+        cachedCount === 0 ? "No cache, generating" : "Generating";
       for (let index = 0; index < mockStudentList.length; index += 1) {
         const student = mockStudentList[index];
+        const cachedPlan = cachedMap.get(student.id);
+
+        if (cachedPlan) {
+          results.push({ id: student.id, name: student.name, plan: cachedPlan });
+          setCohortProgress({
+            processed: index + 1,
+            total: mockStudentList.length,
+            currentName: `Loaded ${student.name} (from cache)`,
+          });
+          setCohortResults([...results]);
+          continue;
+        }
+
         setCohortProgress({
           processed: index,
           total: mockStudentList.length,
-          currentName: student.name,
+          currentName: `${generatingLabel} ${student.name}...`,
         });
         const response = await fetch("/api/strategy-single", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student }),
+          body: JSON.stringify({
+            student: { ...student, assignment: assignmentLabel },
+            classId: classId.trim(),
+            sessionId: sessionId.trim(),
+          }),
         });
         const data = await response.json();
         if (!response.ok) {
@@ -337,6 +391,61 @@ export default function Home() {
     }
   };
 
+  const toggleStrategySelection = (strategyId: string) => {
+    setSelectedStrategies((prev) => {
+      if (prev.includes(strategyId)) {
+        return prev.filter((item) => item !== strategyId);
+      }
+      return [...prev, strategyId];
+    });
+  };
+
+  const submitAnnotation = async () => {
+    if (!plan) {
+      return;
+    }
+    if (!annotationDecision) {
+      setAnnotationError("Please choose agree or disagree.");
+      setAnnotationStatus("error");
+      return;
+    }
+    if (annotationDecision === "disagree" && !annotationReason.trim()) {
+      setAnnotationError("Please add the reason you disagree.");
+      setAnnotationStatus("error");
+      return;
+    }
+
+    setAnnotationStatus("saving");
+    setAnnotationError(null);
+    try {
+      const response = await fetch("/api/teacher-annotation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: currentMock?.name ?? null,
+          assignment: assignmentLabel,
+          overallRecommendation: plan.overallRecommendation,
+          recommendationReason: plan.recommendationReason,
+          decision: annotationDecision,
+          reason: annotationReason.trim() || null,
+          aiPlan: plan,
+          selectedStrategies,
+          answers: currentMock?.answers ?? {},
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Failed to save annotation.");
+      }
+      setAnnotationStatus("saved");
+    } catch (err) {
+      setAnnotationError(
+        err instanceof Error ? err.message : "Failed to save annotation.",
+      );
+      setAnnotationStatus("error");
+    }
+  };
+
   useEffect(() => {
     if (!content.length) {
       return;
@@ -355,7 +464,7 @@ export default function Home() {
       fetch("/api/engagement-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item, plan, answers }),
+        body: JSON.stringify({ item, plan, answers: currentMock?.answers ?? {} }),
       })
         .then(async (response) => {
           const data = await response.json();
@@ -380,22 +489,27 @@ export default function Home() {
           }));
         });
     });
-  }, [answers, content, images, plan]);
+  }, [currentMock?.answers, content, images, plan]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12">
         <header className="flex flex-col gap-4">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Engage Agent Prototype
-          </p>
-          <h1 className="text-4xl font-semibold leading-tight text-slate-900">
-            Step-by-step engagement workflow
-          </h1>
-          <p className="max-w-3xl text-lg text-slate-600">
-            Collect a student questionnaire, select an engagement plan with a
-            backend API, then generate content aligned to the plan.
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Engage Agent
+            </p>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase ${
+                process.env.NODE_ENV === "production"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {process.env.NODE_ENV === "production" ? "Production" : "Development"}
+            </span>
+          </div>
+          {/* EngageAgent alignment card hidden
           <div className="max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               EngageAgent alignment
@@ -409,165 +523,175 @@ export default function Home() {
               world works and which can be empirically tested.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="h-2 w-56 overflow-hidden rounded-full bg-slate-200">
-              <div
-                className="h-full rounded-full bg-slate-900 transition-all"
-                style={{ width: `${completion}%` }}
-              />
+          */}
+          {/* Progress bar removed — mock student answers are pre-filled */}
+          <div className="max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Class context
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-slate-400">Class ID</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {classId}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold text-slate-400">
+                  Session ID
+                </p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {sessionId}
+                </p>
+              </div>
             </div>
-            <span className="text-sm text-slate-600">
-              {completion}% questionnaire complete
-            </span>
+            <p className="mt-2 text-xs text-slate-400">
+              Locked for this walkthrough.
+            </p>
           </div>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <div className="flex items-center justify-between">
+        <section className="grid gap-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Step 1
+                  Workflow steps
                 </p>
                 <h2 className="text-2xl font-semibold text-slate-900">
-                  Student questionnaire
+                  Step-by-step flow
                 </h2>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                Required
-              </span>
-            </div>
-            <form className="grid gap-5" onSubmit={handleSubmit}>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-400">
-                      Mock student responses
-                    </p>
-                    <p className="text-sm font-semibold text-slate-800">
-                      {currentMock?.name ?? "Student"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {stepLabels.map((label, index) => {
+                  const stepNumber = index + 1;
+                  const isActive = currentStep === stepNumber;
+                  const isComplete = currentStep > stepNumber;
+                  return (
                     <button
+                      key={label}
                       type="button"
-                      onClick={() =>
-                        setMockIndex((prev) => Math.max(0, prev - 1))
-                      }
-                      disabled={mockIndex === 0}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
+                      onClick={() => setCurrentStep(stepNumber)}
+                      className={`flex flex-1 items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                        isActive
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
                     >
-                      Prev
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setMockIndex((prev) =>
-                          Math.min(mockStudentList.length - 1, prev + 1),
-                        )
-                      }
-                      disabled={mockIndex >= mockStudentList.length - 1}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-3">
-                  {questions
-                    .filter((question) => {
-                      const value = currentMock?.answers?.[question.id]?.trim();
-                      return Boolean(value);
-                    })
-                    .map((question) => (
-                      <div key={question.id} className="grid gap-1">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {question.label}
-                        </p>
-                        <p className="text-sm text-slate-700">
-                          {currentMock?.answers?.[question.id]}
-                        </p>
-                      </div>
-                    ))}
-                </div>
-                <p className="mt-3 text-xs text-slate-400">
-                  {mockIndex + 1} of {mockStudentList.length}
-                </p>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase text-slate-400">
-                  Live questionnaire
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowQuestionnaire((prev) => !prev)}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
-                >
-                  {showQuestionnaire ? "Hide form" : "Enter new responses"}
-                </button>
-              </div>
-              {showQuestionnaire && (
-                <>
-                  {questions.map((question) => (
-                    <label key={question.id} className="grid gap-2 text-sm">
-                      <span className="font-medium text-slate-700">
-                        {question.label}
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                          isActive
+                            ? "bg-white text-slate-900"
+                            : isComplete
+                              ? "bg-emerald-500 text-white"
+                              : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {stepNumber}
                       </span>
-                      {question.type === "select" ? (
-                        <select
-                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
-                          value={answers[question.id] ?? ""}
-                          onChange={(event) =>
-                            handleChange(question.id, event.target.value)
-                          }
-                          required={!question.optional}
-                        >
-                          <option value="" disabled>
-                            Select an option
-                          </option>
-                          {question.options?.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      ) : question.type === "textarea" ? (
-                        <textarea
-                          className="min-h-[120px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
-                          placeholder={question.placeholder}
-                          value={answers[question.id] ?? ""}
-                          onChange={(event) =>
-                            handleChange(question.id, event.target.value)
-                          }
-                          required={!question.optional}
-                        />
-                      ) : (
-                        <input
-                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
-                          placeholder={question.placeholder}
-                          value={answers[question.id] ?? ""}
-                          onChange={(event) =>
-                            handleChange(question.id, event.target.value)
-                          }
-                          required={!question.optional}
-                        />
-                      )}
-                    </label>
-                  ))}
-                  <button
-                    type="submit"
-                    disabled={submitted}
-                    className="mt-2 inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  >
-                    {submitted ? "Saved" : "Save questionnaire"}
-                  </button>
-                </>
-              )}
-            </form>
+                      <span className="font-semibold">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          {currentStep === 1 && (
+            <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Step 1
+                  </p>
+                  <h2 className="text-2xl font-semibold text-slate-900">
+                    Student questionnaire
+                  </h2>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  Required
+                </span>
+              </div>
+              <div className="grid gap-5">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-slate-400">
+                        Mock student responses
+                      </p>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {currentMock?.name ?? "Student"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMockIndex((prev) => Math.max(0, prev - 1))
+                        }
+                        disabled={mockIndex === 0}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMockIndex((prev) =>
+                            Math.min(mockStudentList.length - 1, prev + 1),
+                          )
+                        }
+                        disabled={mockIndex >= mockStudentList.length - 1}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    {questions
+                      .filter((question) => {
+                        const value =
+                          currentMock?.answers?.[question.id]?.trim();
+                        return Boolean(value);
+                      })
+                      .map((question) => (
+                        <div key={question.id} className="grid gap-1">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {question.label}
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {currentMock?.answers?.[question.id]}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400">
+                    {mockIndex + 1} of {mockStudentList.length}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-300"
+                >
+                  Previous step
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                >
+                  Next step
+                </button>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
               <div className="flex flex-col gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                   Step 2
@@ -602,7 +726,7 @@ export default function Home() {
                       <div className="mt-3 grid gap-2">
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
-                          Analyzing {cohortProgress.currentName || "student"}...
+                          {cohortProgress.currentName || "Loading..."}
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                           <div
@@ -677,7 +801,7 @@ export default function Home() {
                             onClick={() =>
                               setShowStudentRecommendations((prev) => !prev)
                             }
-                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
                           >
                             {showStudentRecommendations
                               ? "Hide"
@@ -703,7 +827,10 @@ export default function Home() {
                                   {result.plan.summary}
                                 </p>
                                 <p className="mt-1 text-xs text-slate-500">
-                                  {result.plan.rationale}
+                                  TLDR: {result.plan.tldr}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Reason: {result.plan.recommendationReason}
                                 </p>
                               </div>
                             ))}
@@ -727,12 +854,6 @@ export default function Home() {
                     Generating plan...
                   </div>
                 )}
-                {!submitted && (
-                  <p className="text-xs text-slate-400">
-                    You can create a plan from the live questionnaire or review
-                    cohort results above.
-                  </p>
-                )}
                 {plan && !loadingPlan && (
                   <div className="mt-4 grid gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
                     <div>
@@ -747,6 +868,20 @@ export default function Home() {
                       </p>
                       <p className="text-sm text-slate-600">{plan.summary}</p>
                     </div>
+                    <div className="grid gap-2">
+                      <p className="text-xs font-semibold uppercase text-slate-400">
+                        Overall recommendation
+                      </p>
+                      <p className="text-sm text-slate-700">
+                        {plan.overallRecommendation}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        Reason: {plan.recommendationReason}
+                      </p>
+                      <p className="text-xs font-semibold text-slate-500">
+                        TLDR: {plan.tldr}
+                      </p>
+                    </div>
                     <div className="grid gap-3">
                       <p className="text-xs font-semibold uppercase text-slate-400">
                         Strategy relevance
@@ -760,12 +895,15 @@ export default function Home() {
                               plan.relevance?.[strategy.id] ?? 0,
                             ),
                           );
-                          const isSelected = plan.strategy === strategy.id;
+                          const isRecommended = plan.strategy === strategy.id;
+                          const isSelected = selectedStrategies.includes(
+                            strategy.id,
+                          );
                           return (
                             <div
                               key={strategy.id}
                               className={`rounded-2xl border border-slate-200 bg-white p-3 ${
-                                isSelected
+                                isRecommended
                                   ? `ring-2 ${strategy.ring}`
                                   : "ring-1 ring-transparent"
                               }`}
@@ -784,16 +922,31 @@ export default function Home() {
                                   style={{ width: `${score}%` }}
                                 />
                               </div>
-                              <div className="mt-2 flex justify-end">
+                              <div className="mt-3 flex items-center justify-between">
                                 <span
                                   className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                    isSelected
+                                    isRecommended
                                       ? "bg-slate-900 text-white"
                                       : "bg-slate-100 text-slate-500"
                                   }`}
                                 >
-                                  {isSelected ? "Selected" : "Not selected"}
+                                  {isRecommended
+                                    ? "Recommended"
+                                    : "Alternate"}
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleStrategySelection(strategy.id)
+                                  }
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                    isSelected
+                                      ? "bg-slate-900 text-white"
+                                      : "border border-slate-200 text-slate-600"
+                                  }`}
+                                >
+                                  {isSelected ? "Selected" : "Select"}
+                                </button>
                               </div>
                             </div>
                           );
@@ -820,12 +973,111 @@ export default function Home() {
                       <span>Cadence: {plan.cadence}</span>
                       <span>Checks: {plan.checks.join(", ")}</span>
                     </div>
+                    <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase text-slate-400">
+                          Teacher annotation
+                        </p>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                          Required to log
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-700">
+                        Do you accept the recommended strategy:{" "}
+                        <span className="font-semibold text-slate-900">
+                          {getStrategyLabel(plan.strategy)}
+                        </span>
+                        ?
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAnnotationDecision("agree")}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold ${
+                            annotationDecision === "agree"
+                              ? "bg-emerald-600 text-white"
+                              : "border border-slate-200 text-slate-600"
+                          }`}
+                        >
+                          Accept recommendation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAnnotationDecision("disagree")}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold ${
+                            annotationDecision === "disagree"
+                              ? "bg-rose-600 text-white"
+                              : "border border-slate-200 text-slate-600"
+                          }`}
+                        >
+                          Disagree
+                        </button>
+                      </div>
+                      {annotationDecision === "disagree" && (
+                        <label className="grid gap-1 text-xs font-semibold text-slate-500">
+                          Which strategies do you think should be used and why?
+                          <p className="text-[11px] font-normal text-slate-400">
+                            You can select different strategies above, then
+                            explain your reasoning below.
+                          </p>
+                          <textarea
+                            className="min-h-[96px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+                            value={annotationReason}
+                            onChange={(event) =>
+                              setAnnotationReason(event.target.value)
+                            }
+                            placeholder="e.g. Experience bridging and analogy — the student has strong real-world examples that could be leveraged."
+                            required
+                          />
+                        </label>
+                      )}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={submitAnnotation}
+                          disabled={annotationStatus === "saving"}
+                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                        >
+                          {annotationStatus === "saving"
+                            ? "Saving..."
+                            : "Save annotation"}
+                        </button>
+                        {annotationStatus === "saved" && (
+                          <span className="text-xs font-semibold text-emerald-600">
+                            Annotation saved.
+                          </span>
+                        )}
+                        {annotationStatus === "error" && annotationError && (
+                          <span className="text-xs font-semibold text-rose-600">
+                            {annotationError}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                >
+                  Previous step
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(3)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                >
+                  Next step
+                </button>
+              </div>
             </div>
+          )}
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          {currentStep === 3 && (
+            <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
               <div className="flex flex-col gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                   Step 3
@@ -834,13 +1086,19 @@ export default function Home() {
                   Engagement content generation
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Generate content aligned to the selected plan and student
-                  profile. Use this to engage the learner in-session.
+                  Generate content aligned to the selected strategies and
+                  student profile. Use this to engage the learner in-session.
+                </p>
+                <p className="text-xs text-slate-500">
+                  Selected strategies:{" "}
+                  {selectedStrategies.length
+                    ? selectedStrategies.map(getStrategyLabel).join(", ")
+                    : "None"}
                 </p>
                 <button
                   type="button"
                   onClick={requestContent}
-                  disabled={!plan || loadingContent}
+                  disabled={!plan || loadingContent || !selectedStrategies.length}
                   className="mt-2 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                 >
                   {loadingContent ? "Generating..." : "Generate content"}
@@ -851,41 +1109,38 @@ export default function Home() {
                     Generating content...
                   </div>
                 )}
-                {!plan && (
+                {(!plan || !selectedStrategies.length) && (
                   <p className="text-xs text-slate-400">
-                    Create a plan before generating content.
+                    Create a plan and select at least one strategy.
                   </p>
                 )}
                 {content.length > 0 && !loadingContent && (
-                  <div className="mt-4 grid gap-3">
+                  <div className="mt-4 grid gap-4">
                     {content.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700"
+                        className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700 sm:flex-row sm:items-stretch"
                       >
-                        <p className="text-xs font-semibold uppercase text-slate-400">
-                          {item.type}
-                        </p>
-                        <p className="text-base font-semibold text-slate-900">
-                          {item.title}
-                        </p>
-                        <p className="text-sm text-slate-600">{item.body}</p>
-                        <div className="mt-3">
+                        <div className="shrink-0">
                           {images[item.id]?.status === "loading" && (
-                            <p className="text-xs text-slate-400">
-                              Generating illustration...
-                            </p>
+                            <div className="flex aspect-square w-40 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 sm:w-44">
+                              <p className="text-xs text-slate-400">
+                                Generating...
+                              </p>
+                            </div>
                           )}
                           {images[item.id]?.status === "error" && (
-                            <p className="text-xs text-rose-500">
-                              {images[item.id]?.error}
-                            </p>
+                            <div className="flex aspect-square w-40 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 sm:w-44">
+                              <p className="text-xs text-rose-500">
+                                {images[item.id]?.error}
+                              </p>
+                            </div>
                           )}
                           {images[item.id]?.status === "ready" &&
                             images[item.id]?.url && (
                               <button
                                 type="button"
-                                className="mt-2 w-full cursor-zoom-in rounded-xl border border-slate-200 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                className="block aspect-square w-40 shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 sm:w-44"
                                 onClick={() =>
                                   setFocusImage({
                                     url: images[item.id]?.url ?? "",
@@ -894,73 +1149,59 @@ export default function Home() {
                                 }
                               >
                                 <img
-                                  className="h-auto w-full rounded-lg object-contain"
+                                  className="h-full w-full object-cover"
                                   src={images[item.id]?.url}
                                   alt={`Illustration for ${item.title}`}
                                 />
                               </button>
                             )}
+                          {!images[item.id]?.status && (
+                            <div className="aspect-square w-40 rounded-xl border border-slate-200 bg-slate-100 sm:w-44" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase text-slate-400">
+                            Strategy: {getStrategyLabel(item.strategy)}
+                          </p>
+                          <p className="text-xs font-semibold uppercase text-slate-400">
+                            {item.type}
+                          </p>
+                          <p className="text-base font-semibold text-slate-900">
+                            {item.title}
+                          </p>
+                          <p className="mt-2 text-sm text-slate-600">
+                            {item.body}
+                          </p>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                  >
+                    Previous step
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-300"
+                  >
+                    Next step
+                  </button>
+                </div>
               </div>
             </div>
+          )}
 
-            {error && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                {error}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Feature catalog
-              </p>
-              <h2 className="text-2xl font-semibold text-slate-900">
-                Engagement features and variables
-              </h2>
-              <p className="text-sm text-slate-600">
-                Use these features to label student responses, inform routing,
-                and refine the engagement plan selection.
-              </p>
+          {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              {error}
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-100">
-              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-[0.2em] text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Code</th>
-                    <th className="px-4 py-3 font-semibold">Feature name</th>
-                    <th className="px-4 py-3 font-semibold">Values</th>
-                    <th className="px-4 py-3 font-semibold">How it is derived</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {featureCatalog.map((feature) => (
-                    <tr key={feature.code}>
-                      <td className="px-4 py-3 font-semibold text-slate-700">
-                        {feature.code}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {feature.name}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {feature.values}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {feature.derived}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          )}
         </section>
 
         {focusImage && (

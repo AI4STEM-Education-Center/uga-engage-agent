@@ -13,12 +13,13 @@ content in a single, end-to-end experience.
 - Cohort analysis to compare strategies across multiple students
 - Content generation (warm-up, mini lesson, practice)
 - Image generation aligned to the content
-- Simple caching of strategy results in SQLite
+- Simple caching of strategy results in a local NoSQL JSON store or DynamoDB
 
 ## Backend location
 
 The backend is implemented as Next.js API routes under `app/api`, with shared
-data helpers in `lib`. Caching lives in `data/engage.sqlite`.
+data helpers in `lib`. Caching lives in `data/engage-nosql.json` unless
+DynamoDB is configured.
 
 ## Getting started
 
@@ -35,7 +36,20 @@ OPENAI_API_KEY=your_key_here
 # Optional
 OPENAI_MODEL=gpt-5-nano
 OPENAI_IMAGE_MODEL=gpt-image-1
+
+# Optional DynamoDB cache (uses local JSON store if not set)
+AWS_REGION=us-east-1
+DYNAMODB_TABLE=engage_strategy_cache
 ```
+
+## DynamoDB table schema
+
+Create a table named `engage_strategy_cache` (or your chosen
+`DYNAMODB_TABLE`) with a partition key:
+
+- `student_id` (String)
+
+Items store `plan_json` (String) and `updated_at` (String ISO timestamp).
 
 3. Run the development server
 
