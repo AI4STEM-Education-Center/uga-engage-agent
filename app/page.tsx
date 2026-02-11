@@ -467,9 +467,19 @@ export default function Home() {
         body: JSON.stringify({ item, plan, answers: currentMock?.answers ?? {} }),
       })
         .then(async (response) => {
-          const data = await response.json();
+          const text = await response.text();
+          let data: Record<string, unknown>;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            throw new Error(
+              response.ok
+                ? "Image response was empty (possible timeout)."
+                : `Image request failed (${response.status}).`,
+            );
+          }
           if (!response.ok) {
-            throw new Error(data?.error ?? "Failed to generate image.");
+            throw new Error((data?.error as string) ?? "Failed to generate image.");
           }
           return data;
         })

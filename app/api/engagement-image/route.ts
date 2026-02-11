@@ -33,6 +33,8 @@ Description: ${item.body}
 Style: clean, minimal, classroom-friendly, no text labels.`;
 };
 
+export const maxDuration = 60; // seconds – image generation can take 15-30s
+
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
       model,
       prompt,
       size: "1024x1024",
+      response_format: "url",
     });
 
     const data = result.data?.[0];
