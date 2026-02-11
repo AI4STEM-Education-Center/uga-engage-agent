@@ -54,11 +54,12 @@ export async function POST(request: Request) {
     const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
     const prompt = buildPrompt(item, plan, answers);
 
-    // webp is much smaller than default png, avoids serverless body-size limits
+    // webp + low quality = fast generation + small payload (avoids Amplify 30s timeout)
     const result = await client.images.generate({
       model,
       prompt,
       size: "1024x1024",
+      quality: "low",
       output_format: "webp",
     });
 

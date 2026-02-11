@@ -451,22 +451,38 @@ export default function Home() {
       return;
     }
 
-    content.forEach((item) => {
-      if (images[item.id]?.status) {
-        return;
+    // Collect items that still need images (skip already started/done)
+    const pending = content.filter((item) => !images[item.id]?.status);
+    if (pending.length === 0) {
+      return;
+    }
+
+    // Mark all pending items as loading up front
+    setImages((prev) => {
+      const next = { ...prev };
+      for (const item of pending) {
+        next[item.id] = { status: "loading" };
       }
+      return next;
+    });
 
-      setImages((prev) => ({
-        ...prev,
-        [item.id]: { status: "loading" },
-      }));
-
-      fetch("/api/engagement-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item, plan, answers: currentMock?.answers ?? {} }),
-      })
-        .then(async (response) => {
+    // Generate images one at a time to stay within Amplify's 30s Lambda timeout.
+    // Parallel requests each spin up their own Lambda and compete for cold starts,
+    // making timeouts far more likely.
+    let cancelled = false;
+    (async () => {
+      for (const item of pending) {
+        if (cancelled) break;
+        try {
+          const response = await fetch("/api/engagement-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              item,
+              plan,
+              answers: currentMock?.answers ?? {},
+            }),
+          });
           const text = await response.text();
           let data: Record<string, unknown>;
           try {
@@ -479,27 +495,35 @@ export default function Home() {
             );
           }
           if (!response.ok) {
-            throw new Error((data?.error as string) ?? "Failed to generate image.");
+            throw new Error(
+              (data?.error as string) ?? "Failed to generate image.",
+            );
           }
-          return data;
-        })
-        .then((data) => {
-          setImages((prev) => ({
-            ...prev,
-            [item.id]: { status: "ready", url: data.url as string },
-          }));
-        })
-        .catch((err) => {
-          setImages((prev) => ({
-            ...prev,
-            [item.id]: {
-              status: "error",
-              error: err instanceof Error ? err.message : "Image failed.",
-            },
-          }));
-        });
-    });
-  }, [currentMock?.answers, content, images, plan]);
+          if (!cancelled) {
+            setImages((prev) => ({
+              ...prev,
+              [item.id]: { status: "ready", url: data.url as string },
+            }));
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setImages((prev) => ({
+              ...prev,
+              [item.id]: {
+                status: "error",
+                error: err instanceof Error ? err.message : "Image failed.",
+              },
+            }));
+          }
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
