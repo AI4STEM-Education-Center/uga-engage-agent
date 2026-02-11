@@ -54,10 +54,12 @@ export async function POST(request: Request) {
     const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
     const prompt = buildPrompt(item, plan, answers);
 
+    // webp is much smaller than default png, avoids serverless body-size limits
     const result = await client.images.generate({
       model,
       prompt,
       size: "1024x1024",
+      output_format: "webp",
     });
 
     const data = result.data?.[0];
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      url: base64 ? `data:image/png;base64,${base64}` : url,
+      url: base64 ? `data:image/webp;base64,${base64}` : url,
     });
   } catch (error) {
     const message =
