@@ -486,7 +486,7 @@ export default function Home() {
         .then((data) => {
           setImages((prev) => ({
             ...prev,
-            [item.id]: { status: "ready", url: data.url },
+            [item.id]: { status: "ready", url: data.url as string },
           }));
         })
         .catch((err) => {
