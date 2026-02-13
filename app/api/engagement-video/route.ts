@@ -26,10 +26,10 @@ Do not add narration or lesson explanation.
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const xaiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+  const xaiKey = process.env.GROK_API_KEY;
   if (!xaiKey) {
     return NextResponse.json(
-      { error: "XAI_API_KEY or GROK_API_KEY is not set." },
+      { error: "GROK_API_KEY is not set." },
       { status: 500 },
     );
   }

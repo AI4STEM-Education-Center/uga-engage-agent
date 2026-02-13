@@ -6,10 +6,10 @@ export const maxDuration = 60; // Poll + return URL (no download in request)
 const XAI_VIDEO_BASE = "https://api.x.ai/v1/videos";
 
 export async function GET(request: NextRequest) {
-  const xaiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+  const xaiKey = process.env.GROK_API_KEY;
   if (!xaiKey) {
     return NextResponse.json(
-      { error: "XAI_API_KEY or GROK_API_KEY is not set." },
+      { error: "GROK_API_KEY is not set." },
       { status: 500 },
     );
   }
