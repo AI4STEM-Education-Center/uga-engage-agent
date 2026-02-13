@@ -7,6 +7,8 @@ frontend:
     build:
       commands:
         - echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> .env.production
+        - echo "GROK_API_KEY=$GROK_API_KEY" >> .env.production
+        - echo "XAI_API_KEY=$XAI_API_KEY" >> .env.production
         - echo "DYNAMODB_TABLE=$DYNAMODB_TABLE" >> .env.production
         - echo "ENGAGE_AWS_REGION=$ENGAGE_AWS_REGION" >> .env.production
         - echo "ENGAGE_AWS_ACCESS_KEY_ID=$ENGAGE_AWS_ACCESS_KEY_ID" >> .env.production
