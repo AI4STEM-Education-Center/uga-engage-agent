@@ -26,8 +26,7 @@ export async function POST(request: Request) {
     if (!overallRecommendation || !decision) {
       return NextResponse.json(
         {
-          error:
-            "overallRecommendation and decision are required.",
+          error: "overallRecommendation and decision are required.",
         },
         { status: 400 },
       );
@@ -55,9 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ annotation: record });
   } catch (error) {
     const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to save annotation.";
+      error instanceof Error ? error.message : "Failed to save annotation.";
     console.error("teacher-annotation error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }

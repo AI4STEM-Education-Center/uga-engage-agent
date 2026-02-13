@@ -5,18 +5,37 @@ import {
   PutCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+
+const DYNAMODB_MAX_ITEM_BYTES = 400_000;
 
 type StrategyCacheRecord = {
   plan_json: string;
   updated_at: string;
 };
 
+type MediaRecord = {
+  media_id: string;
+  content_item_id: string;
+  media_type: "image" | "video";
+  mime_type: string;
+  data_url?: string;
+  s3_bucket?: string;
+  s3_key?: string;
+  class_id: string;
+  session_id: string;
+  student_id: string;
+  created_at: string;
+};
+
 type Store = {
   strategy_cache: Record<string, StrategyCacheRecord>;
   teacher_annotations: TeacherAnnotation[];
+  media: MediaRecord[];
 };
 
 type TeacherAnnotation = {
@@ -38,7 +57,11 @@ export type TeacherAnnotationInput = Omit<
   "annotation_id" | "created_at"
 >;
 
-const emptyStore: Store = { strategy_cache: {}, teacher_annotations: [] };
+const emptyStore: Store = {
+  strategy_cache: {},
+  teacher_annotations: [],
+  media: [],
+};
 const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "engage-nosql.json");
 
@@ -47,6 +70,27 @@ const dynamoRegion = process.env.ENGAGE_AWS_REGION;
 const dynamoTableName = process.env.DYNAMODB_TABLE ?? "";
 const dynamoAccessKeyId = process.env.ENGAGE_AWS_ACCESS_KEY_ID;
 const dynamoSecretAccessKey = process.env.ENGAGE_AWS_SECRET_ACCESS_KEY;
+const s3Bucket = process.env.ENGAGE_S3_BUCKET;
+const s3Region = process.env.ENGAGE_AWS_REGION ?? process.env.AWS_REGION ?? "us-east-1";
+
+let s3Client: S3Client | null = null;
+
+const getS3Client = () => {
+  if (!s3Bucket) return null;
+  if (!s3Client) {
+    s3Client = new S3Client({
+      region: s3Region,
+      ...(dynamoAccessKeyId &&
+        dynamoSecretAccessKey && {
+          credentials: {
+            accessKeyId: dynamoAccessKeyId,
+            secretAccessKey: dynamoSecretAccessKey,
+          },
+        }),
+    });
+  }
+  return s3Client;
+};
 const pkField = "class_id";
 const skField = "record_id";
 const gsiTeacherPkField = "teacher_id";
@@ -114,6 +158,9 @@ const loadStore = async () => {
       }
       if (!Array.isArray(parsed.teacher_annotations)) {
         parsed.teacher_annotations = [];
+      }
+      if (!Array.isArray(parsed.media)) {
+        parsed.media = [];
       }
       storeCache = parsed;
       return parsed;
@@ -346,4 +393,291 @@ export const recordTeacherAnnotation = async (
   });
 
   return record;
+};
+
+/* ------------------------------------------------------------------ */
+/*  Media storage (images & videos)                                    */
+/* ------------------------------------------------------------------ */
+
+export type UpsertMediaInput = {
+  classId: string;
+  sessionId: string;
+  studentId: string;
+  contentItemId: string;
+  mediaType: "image" | "video";
+  mimeType: string;
+  dataUrl: string;
+};
+
+const mediaExt = (mime: string) =>
+  mime.includes("webp") ? "webp" : mime.includes("mp4") ? "mp4" : "bin";
+
+/**
+ * Store (or replace) a generated image/video for a specific content item.
+ * Key: classId + sessionId + studentId + contentItemId + mediaType
+ * When using DynamoDB: stores in S3 if ENGAGE_S3_BUCKET is set (avoids 400KB limit).
+ */
+export const upsertMedia = async (input: UpsertMediaInput) => {
+  const {
+    classId,
+    sessionId,
+    studentId,
+    contentItemId,
+    mediaType,
+    mimeType,
+    dataUrl,
+  } = input;
+  const mediaId = `${classId}_${sessionId}_${studentId}_${contentItemId}_${mediaType}`;
+  const createdAt = new Date().toISOString();
+
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) {
+      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+    }
+
+    const s3 = getS3Client();
+    if (s3 && s3Bucket) {
+      // Upload to S3; store only s3_key in DynamoDB (< 400KB)
+      const base64Match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+      const body = base64Match
+        ? Buffer.from(base64Match[1], "base64")
+        : Buffer.from(dataUrl, "utf-8");
+      const ext = mediaExt(mimeType);
+      const s3Key = `media/${classId}/${sessionId}/${studentId}/${contentItemId}_${mediaType}.${ext}`;
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: s3Bucket,
+          Key: s3Key,
+          Body: body,
+          ContentType: mimeType,
+        }),
+      );
+
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: `CLASS#${classId}`,
+            [skField]: `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+            record_type: "media",
+            session_id: sessionId,
+            [gsiStudentPkField]: `STUDENT#${studentId}`,
+            [gsiStudentSkField]: `MEDIA#SESSION#${sessionId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+            media_id: mediaId,
+            content_item_id: contentItemId,
+            media_type: mediaType,
+            mime_type: mimeType,
+            s3_bucket: s3Bucket,
+            s3_key: s3Key,
+            created_at: createdAt,
+          },
+        }),
+      );
+      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+    }
+
+    // No S3: only persist if under DynamoDB limit
+    const itemSize = new TextEncoder().encode(JSON.stringify({ data_url: dataUrl })).length;
+    if (itemSize > DYNAMODB_MAX_ITEM_BYTES) {
+      console.warn(
+        `Media ${mediaId} exceeds DynamoDB 400KB limit (${Math.round(itemSize / 1024)}KB). Set ENGAGE_S3_BUCKET to store in S3.`,
+      );
+      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+    }
+
+    await client.send(
+      new PutCommand({
+        TableName: dynamoTableName,
+        Item: {
+          [pkField]: `CLASS#${classId}`,
+          [skField]: `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+          record_type: "media",
+          session_id: sessionId,
+          [gsiStudentPkField]: `STUDENT#${studentId}`,
+          [gsiStudentSkField]: `MEDIA#SESSION#${sessionId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+          media_id: mediaId,
+          content_item_id: contentItemId,
+          media_type: mediaType,
+          mime_type: mimeType,
+          data_url: dataUrl,
+          created_at: createdAt,
+        },
+      }),
+    );
+    return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, data_url: dataUrl, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+  }
+
+  // Local JSON: store data_url (no size limit)
+  const record: MediaRecord = {
+    media_id: mediaId,
+    content_item_id: contentItemId,
+    media_type: mediaType,
+    mime_type: mimeType,
+    data_url: dataUrl,
+    class_id: classId,
+    session_id: sessionId,
+    student_id: studentId,
+    created_at: createdAt,
+  };
+
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const existingIndex = store.media.findIndex((m) => m.media_id === mediaId);
+    if (existingIndex >= 0) {
+      store.media[existingIndex] = record;
+    } else {
+      store.media.push(record);
+    }
+    await persistStore(store);
+  });
+
+  return record;
+};
+
+const PRESIGNED_EXPIRY_SEC = 3600;
+
+async function resolveMediaUrl(record: MediaRecord): Promise<MediaRecord> {
+  if (record.data_url) return record;
+  if (record.s3_key && record.s3_bucket) {
+    const s3 = getS3Client();
+    if (s3) {
+      const command = new GetObjectCommand({
+        Bucket: record.s3_bucket,
+        Key: record.s3_key,
+      });
+      const url = await getSignedUrl(s3, command, {
+        expiresIn: PRESIGNED_EXPIRY_SEC,
+      });
+      return { ...record, data_url: url };
+    }
+  }
+  return record;
+}
+
+/**
+ * Retrieve a single media record by its composite key.
+ */
+export const getMedia = async (
+  classId: string,
+  sessionId: string,
+  studentId: string,
+  contentItemId: string,
+  mediaType: "image" | "video",
+): Promise<MediaRecord | null> => {
+  let record: MediaRecord | null = null;
+
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return null;
+    const result = await client.send(
+      new GetCommand({
+        TableName: dynamoTableName,
+        Key: {
+          [pkField]: `CLASS#${classId}`,
+          [skField]: `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+        },
+      }),
+    );
+    if (!result.Item) return null;
+    const hasData = result.Item.data_url || result.Item.s3_key;
+    if (!hasData) return null;
+    record = {
+      media_id: (result.Item.media_id as string) ?? "",
+      content_item_id: (result.Item.content_item_id as string) ?? contentItemId,
+      media_type: (result.Item.media_type as "image" | "video") ?? mediaType,
+      mime_type: (result.Item.mime_type as string) ?? "",
+      data_url: result.Item.data_url as string | undefined,
+      s3_bucket: result.Item.s3_bucket as string | undefined,
+      s3_key: result.Item.s3_key as string | undefined,
+      class_id: classId,
+      session_id: sessionId,
+      student_id: studentId,
+      created_at: (result.Item.created_at as string) ?? "",
+    };
+  } else {
+    const store = await loadStore();
+    const mediaId = `${classId}_${sessionId}_${studentId}_${contentItemId}_${mediaType}`;
+    record = store.media.find((m) => m.media_id === mediaId) ?? null;
+  }
+
+  if (!record) return null;
+  return resolveMediaUrl(record);
+};
+
+/**
+ * List all media for a given class + session + student.
+ * Optionally filter by contentItemId and/or mediaType.
+ */
+export const listMedia = async (
+  classId: string,
+  sessionId: string,
+  studentId: string,
+  contentItemId?: string,
+  mediaType?: "image" | "video",
+): Promise<MediaRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) {
+      return [];
+    }
+
+    // Query by PK + SK prefix for the student's media in this session
+    let skPrefix = `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#`;
+    if (contentItemId) {
+      skPrefix += `ITEM#${contentItemId}#`;
+      if (mediaType) {
+        skPrefix += mediaType.toUpperCase();
+      }
+    }
+
+    const result = await client.send(
+      new QueryCommand({
+        TableName: dynamoTableName,
+        KeyConditionExpression:
+          "#pk = :pk AND begins_with(#sk, :skPrefix)",
+        ExpressionAttributeNames: {
+          "#pk": pkField,
+          "#sk": skField,
+        },
+        ExpressionAttributeValues: {
+          ":pk": `CLASS#${classId}`,
+          ":skPrefix": skPrefix,
+        },
+      }),
+    );
+
+    const records = (result.Items ?? [])
+      .filter(
+        (item) =>
+          item.record_type === "media" && (item.data_url || item.s3_key),
+      )
+      .map((item) => ({
+        media_id: (item.media_id as string) ?? "",
+        content_item_id: (item.content_item_id as string) ?? "",
+        media_type: (item.media_type as "image" | "video") ?? "image",
+        mime_type: (item.mime_type as string) ?? "",
+        data_url: item.data_url as string | undefined,
+        s3_bucket: item.s3_bucket as string | undefined,
+        s3_key: item.s3_key as string | undefined,
+        class_id: classId,
+        session_id: sessionId,
+        student_id: studentId,
+        created_at: (item.created_at as string) ?? "",
+      }));
+    return Promise.all(records.map(resolveMediaUrl));
+  }
+
+  // Local JSON fallback
+  const store = await loadStore();
+  const records = store.media.filter((m) => {
+    if (m.class_id !== classId) return false;
+    if (m.session_id !== sessionId) return false;
+    if (m.student_id !== studentId) return false;
+    if (contentItemId && m.content_item_id !== contentItemId) return false;
+    if (mediaType && m.media_type !== mediaType) return false;
+    return true;
+  });
+  return Promise.all(records.map(resolveMediaUrl));
 };

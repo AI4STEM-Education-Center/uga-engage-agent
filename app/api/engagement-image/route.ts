@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { getMedia, upsertMedia } from "@/lib/nosql";
 
 type Answers = Record<string, string | undefined>;
 
@@ -13,6 +14,7 @@ type Plan = {
 };
 
 type ContentItem = {
+  id?: string;
   type: string;
   title: string;
   body: string;
@@ -30,7 +32,9 @@ Title: ${item.title}
 Plan: ${planName}
 Description: ${item.body}
 
-Style: clean, minimal, classroom-friendly, no text labels.`;
+Style: clean, minimal, classroom-friendly.
+Hard requirement: no text anywhere in the image.
+Do not render words, letters, numbers, symbols, labels, captions, signs, or watermarks.`;
 };
 
 export const maxDuration = 60; // seconds – image generation can take 15-30s
@@ -45,10 +49,20 @@ export async function POST(request: Request) {
 
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const { item, plan, answers = {} } = (await request.json()) as {
+    const {
+      item,
+      plan,
+      answers = {},
+      classId,
+      sessionId,
+      studentId,
+    } = (await request.json()) as {
       item: ContentItem;
       plan: Plan | null;
       answers?: Answers;
+      classId?: string;
+      sessionId?: string;
+      studentId?: string;
     };
 
     const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
@@ -70,9 +84,38 @@ export async function POST(request: Request) {
       throw new Error("Image generation returned empty data.");
     }
 
-    return NextResponse.json({
-      url: base64 ? `data:image/webp;base64,${base64}` : url,
-    });
+    let dataUrl = base64 ? `data:image/webp;base64,${base64}` : (url ?? "");
+
+    // Persist to DB if we have enough context
+    if (item.id && classId && sessionId && studentId) {
+      try {
+        await upsertMedia({
+          classId,
+          sessionId,
+          studentId,
+          contentItemId: item.id,
+          mediaType: "image",
+          mimeType: "image/webp",
+          dataUrl,
+        });
+        // Prefer a shareable URL (e.g., presigned S3) for downstream video APIs.
+        const persisted = await getMedia(
+          classId,
+          sessionId,
+          studentId,
+          item.id,
+          "image",
+        );
+        if (persisted?.data_url) {
+          dataUrl = persisted.data_url;
+        }
+      } catch (err) {
+        console.error("Failed to persist image to DB:", err);
+        // Don't fail the response — return the image anyway
+      }
+    }
+
+    return NextResponse.json({ url: dataUrl });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to generate image.";

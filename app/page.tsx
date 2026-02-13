@@ -34,6 +34,13 @@ type ImageState = {
   error?: string;
 };
 
+type VideoState = {
+  status: "idle" | "loading" | "polling" | "ready" | "error";
+  url?: string;
+  error?: string;
+  operationName?: string;
+};
+
 type MockStudent = {
   id: string;
   name: string;
@@ -52,15 +59,13 @@ const assignmentLabel =
 const questions = [
   {
     id: "conceptUnderstanding",
-    label:
-      "In your own words, how would you explain gravity right now?",
+    label: "In your own words, how would you explain gravity right now?",
     type: "textarea",
     placeholder: "Write 2-4 sentences.",
   },
   {
     id: "pastExperiences",
-    label:
-      "Describe a past experience where you noticed gravity in real life.",
+    label: "Describe a past experience where you noticed gravity in real life.",
     type: "textarea",
     placeholder: "Example: dropping a ball, jumping, riding a swing.",
   },
@@ -142,7 +147,12 @@ export default function Home() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [images, setImages] = useState<Record<string, ImageState>>({});
+  const [videos, setVideos] = useState<Record<string, VideoState>>({});
   const [focusImage, setFocusImage] = useState<{
+    url: string;
+    title: string;
+  } | null>(null);
+  const [focusVideo, setFocusVideo] = useState<{
     url: string;
     title: string;
   } | null>(null);
@@ -242,11 +252,17 @@ export default function Home() {
       const response = await fetch("/api/engagement-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: currentMock?.answers ?? {}, plan, selectedStrategies }),
+        body: JSON.stringify({
+          answers: currentMock?.answers ?? {},
+          plan,
+          selectedStrategies,
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error ?? "Failed to generate engagement content.");
+        throw new Error(
+          data?.error ?? "Failed to generate engagement content.",
+        );
       }
       const items = (data.items ?? []).map(
         (item: Omit<ContentItem, "id">, index: number) => ({
@@ -256,6 +272,45 @@ export default function Home() {
       );
       setContent(items);
       setImages({});
+      setVideos({});
+
+      // Try to load cached media for these content items
+      const studentIdVal = currentMock?.id;
+      if (studentIdVal && classId && sessionId && items.length > 0) {
+        try {
+          const mediaUrl = `/api/media?classId=${encodeURIComponent(classId)}&sessionId=${encodeURIComponent(sessionId)}&studentId=${encodeURIComponent(studentIdVal)}`;
+          const mediaRes = await fetch(mediaUrl);
+          if (mediaRes.ok) {
+            const mediaData = await mediaRes.json();
+            const records = mediaData.results ?? [];
+            const cachedImages: Record<string, ImageState> = {};
+            const cachedVideos: Record<string, VideoState> = {};
+            for (const rec of records) {
+              if (rec.media_type === "image" && rec.data_url) {
+                cachedImages[rec.content_item_id] = {
+                  status: "ready",
+                  url: rec.data_url,
+                };
+              }
+              if (rec.media_type === "video" && rec.data_url) {
+                cachedVideos[rec.content_item_id] = {
+                  status: "ready",
+                  url: rec.data_url,
+                };
+              }
+            }
+            if (Object.keys(cachedImages).length > 0) {
+              setImages(cachedImages);
+            }
+            if (Object.keys(cachedVideos).length > 0) {
+              setVideos(cachedVideos);
+            }
+          }
+        } catch {
+          // Ignore cache load errors — images/videos will be regenerated
+        }
+      }
+
       setCurrentStep(3);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error.");
@@ -282,12 +337,19 @@ export default function Home() {
       /* ---- 1. Fetch all cached plans for this session in one call ---- */
       const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId.trim())}&sessionId=${encodeURIComponent(sessionId.trim())}`;
       const cacheResponse = await fetch(cacheUrl);
-      let cacheData: { results?: Array<{ studentId?: string; plan?: unknown }>; error?: string } = { results: [] };
+      let cacheData: {
+        results?: Array<{ studentId?: string; plan?: unknown }>;
+        error?: string;
+      } = { results: [] };
       if (cacheResponse.ok) {
         cacheData = await cacheResponse.json();
       } else {
         const errBody = await cacheResponse.json().catch(() => ({}));
-        console.warn("Strategy cache fetch failed:", cacheResponse.status, errBody?.error ?? cacheResponse.statusText);
+        console.warn(
+          "Strategy cache fetch failed:",
+          cacheResponse.status,
+          errBody?.error ?? cacheResponse.statusText,
+        );
       }
       const cachedMap = new Map<string, Plan>();
       for (const entry of cacheData.results ?? []) {
@@ -339,7 +401,11 @@ export default function Home() {
         const cachedPlan = cachedMap.get(student.id);
 
         if (cachedPlan) {
-          results.push({ id: student.id, name: student.name, plan: cachedPlan });
+          results.push({
+            id: student.id,
+            name: student.name,
+            plan: cachedPlan,
+          });
           setCohortProgress({
             processed: index + 1,
             total: mockStudentList.length,
@@ -365,9 +431,7 @@ export default function Home() {
         });
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(
-            data?.error ?? `Failed to analyze ${student.name}.`,
-          );
+          throw new Error(data?.error ?? `Failed to analyze ${student.name}.`);
         }
         results.push({ id: student.id, name: student.name, plan: data.plan });
         setCohortResults([...results]);
@@ -481,6 +545,9 @@ export default function Home() {
               item,
               plan,
               answers: currentMock?.answers ?? {},
+              classId,
+              sessionId,
+              studentId: currentMock?.id,
             }),
           });
           const text = await response.text();
@@ -525,6 +592,96 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
+  const requestVideo = async (item: ContentItem) => {
+    const imageUrl = images[item.id]?.url;
+    if (!imageUrl) return;
+
+    setVideos((prev) => ({ ...prev, [item.id]: { status: "loading" } }));
+    try {
+      const startRes = await fetch("/api/engagement-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item,
+          plan,
+          answers: currentMock?.answers ?? {},
+          imageUrl,
+        }),
+      });
+      const startData = await startRes.json();
+      if (!startRes.ok) {
+        throw new Error(startData?.error ?? "Failed to start video.");
+      }
+
+      setVideos((prev) => ({
+        ...prev,
+        [item.id]: { status: "polling", operationName: startData.requestId },
+      }));
+
+      const pollOperation = async (
+        requestId: string,
+        contentItemId: string,
+      ): Promise<{ done: boolean; url?: string; error?: string }> => {
+        const params = new URLSearchParams({
+          requestId,
+          contentItemId,
+          classId,
+          sessionId,
+          studentId: currentMock?.id ?? "",
+        });
+        const res = await fetch(`/api/engagement-video/status?${params}`);
+        const data = await res.json();
+        if (!res.ok) {
+          return {
+            done: false,
+            error: data?.error ?? "Video status check failed.",
+          };
+        }
+        return data;
+      };
+
+      const maxPolls = 120;
+      let pollCount = 0;
+      let result: { done: boolean; url?: string; error?: string } = {
+        done: false,
+      };
+
+      while (!result.done && pollCount < maxPolls) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        pollCount += 1;
+        result = await pollOperation(startData.requestId, item.id);
+      }
+
+      if (result.done && result.url) {
+        setVideos((prev) => ({
+          ...prev,
+          [item.id]: { status: "ready", url: result.url },
+        }));
+      } else if (result.done && result.error) {
+        setVideos((prev) => ({
+          ...prev,
+          [item.id]: {
+            status: "error",
+            error: result.error ?? "Video failed.",
+          },
+        }));
+      } else {
+        setVideos((prev) => ({
+          ...prev,
+          [item.id]: { status: "error", error: "Video generation timed out." },
+        }));
+      }
+    } catch (err) {
+      setVideos((prev) => ({
+        ...prev,
+        [item.id]: {
+          status: "error",
+          error: err instanceof Error ? err.message : "Video failed.",
+        },
+      }));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12">
@@ -540,7 +697,9 @@ export default function Home() {
                   : "bg-amber-100 text-amber-800"
               }`}
             >
-              {process.env.NODE_ENV === "production" ? "Production" : "Development"}
+              {process.env.NODE_ENV === "production"
+                ? "Production"
+                : "Development"}
             </span>
           </div>
           {/* EngageAgent alignment card hidden
@@ -664,7 +823,7 @@ export default function Home() {
                           setMockIndex((prev) => Math.max(0, prev - 1))
                         }
                         disabled={mockIndex === 0}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
                       >
                         Prev
                       </button>
@@ -676,7 +835,7 @@ export default function Home() {
                           )
                         }
                         disabled={mockIndex >= mockStudentList.length - 1}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
                       >
                         Next
                       </button>
@@ -797,8 +956,7 @@ export default function Home() {
                           Strategy distribution
                         </p>
                         {strategies.map((strategy) => {
-                          const count =
-                            cohortDistribution[strategy.id] ?? 0;
+                          const count = cohortDistribution[strategy.id] ?? 0;
                           const percent = Math.round(
                             (count / cohortResults.length) * 100,
                           );
@@ -837,9 +995,7 @@ export default function Home() {
                             }
                             className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
                           >
-                            {showStudentRecommendations
-                              ? "Hide"
-                              : "Show all"}
+                            {showStudentRecommendations ? "Hide" : "Show all"}
                           </button>
                         </div>
                         {showStudentRecommendations && (
@@ -924,10 +1080,7 @@ export default function Home() {
                         {strategies.map((strategy) => {
                           const score = Math.min(
                             100,
-                            Math.max(
-                              0,
-                              plan.relevance?.[strategy.id] ?? 0,
-                            ),
+                            Math.max(0, plan.relevance?.[strategy.id] ?? 0),
                           );
                           const isRecommended = plan.strategy === strategy.id;
                           const isSelected = selectedStrategies.includes(
@@ -964,9 +1117,7 @@ export default function Home() {
                                       : "bg-slate-100 text-slate-500"
                                   }`}
                                 >
-                                  {isRecommended
-                                    ? "Recommended"
-                                    : "Alternate"}
+                                  {isRecommended ? "Recommended" : "Alternate"}
                                 </span>
                                 <button
                                   type="button"
@@ -1132,7 +1283,9 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={requestContent}
-                  disabled={!plan || loadingContent || !selectedStrategies.length}
+                  disabled={
+                    !plan || loadingContent || !selectedStrategies.length
+                  }
                   className="mt-2 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                 >
                   {loadingContent ? "Generating..." : "Generate content"}
@@ -1155,44 +1308,112 @@ export default function Home() {
                         key={item.id}
                         className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700 sm:flex-row sm:items-stretch"
                       >
-                        <div className="shrink-0">
-                          {images[item.id]?.status === "loading" && (
-                            <div className="flex aspect-square w-40 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 sm:w-44">
-                              <p className="text-xs text-slate-400">
-                                Generating...
-                              </p>
-                            </div>
-                          )}
-                          {images[item.id]?.status === "error" && (
-                            <div className="flex aspect-square w-40 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 sm:w-44">
-                              <p className="text-xs text-rose-500">
-                                {images[item.id]?.error}
-                              </p>
-                            </div>
-                          )}
-                          {images[item.id]?.status === "ready" &&
-                            images[item.id]?.url && (
-                              <button
-                                type="button"
-                                className="block aspect-square w-40 shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 sm:w-44"
-                                onClick={() =>
-                                  setFocusImage({
-                                    url: images[item.id]?.url ?? "",
-                                    title: item.title,
-                                  })
-                                }
-                              >
-                                <img
-                                  className="h-full w-full object-cover"
-                                  src={images[item.id]?.url}
-                                  alt={`Illustration for ${item.title}`}
-                                />
-                              </button>
+                        {/* Image + Video side by side on the left (both square) */}
+                        <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+                          {/* Image - square */}
+                          <div className="aspect-square w-32 shrink-0 sm:w-36">
+                            {images[item.id]?.status === "loading" && (
+                              <div className="flex h-full w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100">
+                                <p className="text-xs text-slate-400">
+                                  Generating image...
+                                </p>
+                              </div>
                             )}
-                          {!images[item.id]?.status && (
-                            <div className="aspect-square w-40 rounded-xl border border-slate-200 bg-slate-100 sm:w-44" />
-                          )}
+                            {images[item.id]?.status === "error" && (
+                              <div className="flex h-full w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100">
+                                <p className="text-xs text-rose-500">
+                                  {images[item.id]?.error}
+                                </p>
+                              </div>
+                            )}
+                            {images[item.id]?.status === "ready" &&
+                              images[item.id]?.url && (
+                                <button
+                                  type="button"
+                                  className="block h-full w-full cursor-zoom-in overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                  onClick={() =>
+                                    setFocusImage({
+                                      url: images[item.id]?.url ?? "",
+                                      title: item.title,
+                                    })
+                                  }
+                                >
+                                  <img
+                                    className="h-full w-full object-cover"
+                                    src={images[item.id]?.url}
+                                    alt={`Illustration for ${item.title}`}
+                                  />
+                                </button>
+                              )}
+                            {!images[item.id]?.status && (
+                              <div className="h-full w-full rounded-xl border border-slate-200 bg-slate-100" />
+                            )}
+                          </div>
+                          {/* Video - square, next to image */}
+                          <div className="aspect-square w-32 shrink-0 sm:w-36">
+                            {!videos[item.id]?.status &&
+                              images[item.id]?.status === "ready" && (
+                                <button
+                                  type="button"
+                                  onClick={() => requestVideo(item)}
+                                  className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-slate-400 hover:bg-slate-100"
+                                >
+                                  <span className="text-2xl">▶</span>
+                                  <span className="text-xs font-semibold">
+                                    Generate video
+                                  </span>
+                                </button>
+                              )}
+                            {(videos[item.id]?.status === "loading" ||
+                              videos[item.id]?.status === "polling") && (
+                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                <p className="text-xs text-slate-400">
+                                  {videos[item.id]?.status === "polling"
+                                    ? "Generating..."
+                                    : "Starting..."}
+                                </p>
+                              </div>
+                            )}
+                            {videos[item.id]?.status === "error" && (
+                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                <p className="text-xs text-rose-500">
+                                  {videos[item.id]?.error}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => requestVideo(item)}
+                                  className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            )}
+                            {videos[item.id]?.status === "ready" &&
+                              videos[item.id]?.url && (
+                                <button
+                                  type="button"
+                                  className="block h-full w-full cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                  onClick={() =>
+                                    setFocusVideo({
+                                      url: videos[item.id]?.url ?? "",
+                                      title: item.title,
+                                    })
+                                  }
+                                >
+                                  <video
+                                    className="h-full w-full object-cover"
+                                    src={videos[item.id]?.url}
+                                    muted
+                                    playsInline
+                                    loop
+                                    autoPlay
+                                  />
+                                </button>
+                              )}
+                          </div>
                         </div>
+                        {/* Text content */}
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-semibold uppercase text-slate-400">
                             Strategy: {getStrategyLabel(item.strategy)}
@@ -1264,6 +1485,39 @@ export default function Home() {
               />
               <p className="mt-3 text-center text-sm text-slate-100">
                 {focusImage.title}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {focusVideo && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Video focus view"
+            onClick={() => setFocusVideo(null)}
+          >
+            <div
+              className="relative w-full max-w-4xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="absolute right-2 top-2 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow"
+                onClick={() => setFocusVideo(null)}
+              >
+                Close
+              </button>
+              <video
+                className="max-h-[80vh] w-full rounded-2xl bg-black shadow-2xl"
+                src={focusVideo.url}
+                controls
+                autoPlay
+                playsInline
+              />
+              <p className="mt-3 text-center text-sm text-slate-100">
+                {focusVideo.title}
               </p>
             </div>
           </div>

@@ -84,7 +84,8 @@ const ensurePlanFields = (plan: Plan) => {
     plan.overallRecommendation = plan.summary || "Provide a focused strategy.";
   }
   if (!plan.recommendationReason) {
-    plan.recommendationReason = plan.rationale || "Aligned to student responses.";
+    plan.recommendationReason =
+      plan.rationale || "Aligned to student responses.";
   }
   if (!plan.tldr) {
     plan.tldr = plan.summary || "Use the recommended strategy.";

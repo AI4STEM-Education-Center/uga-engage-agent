@@ -53,8 +53,11 @@ export async function POST(request: Request) {
 
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const { answers = {}, plan, selectedStrategies = [] } =
-      (await request.json()) as {
+    const {
+      answers = {},
+      plan,
+      selectedStrategies = [],
+    } = (await request.json()) as {
       answers?: Answers;
       plan: Plan;
       selectedStrategies?: string[];

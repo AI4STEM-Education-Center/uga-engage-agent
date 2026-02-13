@@ -84,7 +84,8 @@ const ensurePlanFields = (plan: Plan) => {
     plan.overallRecommendation = plan.summary || "Provide a focused strategy.";
   }
   if (!plan.recommendationReason) {
-    plan.recommendationReason = plan.rationale || "Aligned to student responses.";
+    plan.recommendationReason =
+      plan.rationale || "Aligned to student responses.";
   }
   if (!plan.tldr) {
     plan.tldr = plan.summary || "Use the recommended strategy.";
@@ -102,7 +103,11 @@ export async function POST(request: Request) {
 
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const { students = [], classId, sessionId } = (await request.json()) as {
+    const {
+      students = [],
+      classId,
+      sessionId,
+    } = (await request.json()) as {
       students?: Student[];
       classId?: string;
       sessionId?: string;
