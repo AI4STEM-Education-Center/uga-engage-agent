@@ -542,8 +542,23 @@ const PRESIGNED_EXPIRY_SEC = 3600;
 async function resolveMediaUrl(record: MediaRecord): Promise<MediaRecord> {
   if (record.data_url) return record;
   if (record.s3_key && record.s3_bucket) {
-    const s3 = getS3Client();
-    if (s3) {
+    try {
+      // Prefer the shared client if available; otherwise create one on the fly
+      // using the record's bucket region (covers case where ENGAGE_S3_BUCKET
+      // env var is not set but records reference an S3 bucket).
+      let s3 = getS3Client();
+      if (!s3) {
+        s3 = new S3Client({
+          region: s3Region,
+          ...(dynamoAccessKeyId &&
+            dynamoSecretAccessKey && {
+              credentials: {
+                accessKeyId: dynamoAccessKeyId,
+                secretAccessKey: dynamoSecretAccessKey,
+              },
+            }),
+        });
+      }
       const command = new GetObjectCommand({
         Bucket: record.s3_bucket,
         Key: record.s3_key,
@@ -552,6 +567,11 @@ async function resolveMediaUrl(record: MediaRecord): Promise<MediaRecord> {
         expiresIn: PRESIGNED_EXPIRY_SEC,
       });
       return { ...record, data_url: url };
+    } catch (err) {
+      console.error(
+        `Failed to generate presigned URL for ${record.s3_key}:`,
+        err,
+      );
     }
   }
   return record;
