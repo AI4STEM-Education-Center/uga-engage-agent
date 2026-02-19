@@ -43,6 +43,8 @@ const parseJson = (value: string | null | undefined) => {
   };
 };
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -72,22 +74,27 @@ export async function POST(request: Request) {
       strategy: string;
     }> = [];
 
-    for (const strategy of strategies) {
-      const prompt = buildPrompt(answers, plan, strategy);
-      const completion = await client.chat.completions.create({
-        model,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: prompt.system },
-          { role: "user", content: prompt.user },
-        ],
-      });
+    const strategyResults = await Promise.all(
+      strategies.map(async (strategy) => {
+        const prompt = buildPrompt(answers, plan, strategy);
+        const completion = await client.chat.completions.create({
+          model,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: prompt.system },
+            { role: "user", content: prompt.user },
+          ],
+        });
 
-      const data = parseJson(completion.choices[0]?.message?.content);
-      const taggedItems = (data.items ?? []).map((item) => ({
-        ...item,
-        strategy,
-      }));
+        const data = parseJson(completion.choices[0]?.message?.content);
+        return (data.items ?? []).map((item) => ({
+          ...item,
+          strategy,
+        }));
+      }),
+    );
+
+    for (const taggedItems of strategyResults) {
       items.push(...taggedItems);
     }
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 import mockStudents from "@/mock-data/students.json";
 
@@ -144,6 +145,7 @@ const strategies = [
 ];
 
 export default function Home() {
+  const downloadRef = useRef<HTMLAnchorElement>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [images, setImages] = useState<Record<string, ImageState>>({});
@@ -196,6 +198,34 @@ export default function Home() {
     "Strategy recommendation",
     "Content generation",
   ];
+
+  const downloadFile = (url: string, filename: string) => {
+    const anchor = downloadRef.current;
+    if (!anchor) return;
+
+    const triggerDownload = (blobUrl: string) => {
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    };
+
+    if (url.startsWith("data:")) {
+      const [header, base64] = url.split(",");
+      const mime = header.match(/:(.*?);/)?.[1] ?? "application/octet-stream";
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      triggerDownload(URL.createObjectURL(new Blob([bytes], { type: mime })));
+    } else {
+      const proxyUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+      anchor.href = proxyUrl;
+      anchor.download = filename;
+      anchor.click();
+    }
+  };
 
   const requestPlan = async () => {
     setLoadingPlan(true);
@@ -258,12 +288,14 @@ export default function Home() {
           selectedStrategies,
         }),
       });
-      const data = await response.json();
       if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
         throw new Error(
-          data?.error ?? "Failed to generate engagement content.",
+          (body as Record<string, string>)?.error ??
+            "Failed to generate engagement content.",
         );
       }
+      const data = await response.json();
       const items = (data.items ?? []).map(
         (item: Omit<ContentItem, "id">, index: number) => ({
           ...item,
@@ -686,7 +718,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12">
         <header className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-3">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
               Engage Agent
             </p>
@@ -701,7 +733,16 @@ export default function Home() {
                 ? "Production"
                 : "Development"}
             </span>
-          </div>
+            <Link
+              href="/community"
+              className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Community Gallery
+            </Link>
+          </nav>
           {/* EngageAgent alignment card hidden
           <div className="max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -1310,107 +1351,182 @@ export default function Home() {
                       >
                         {/* Image + Video side by side on the left (both square) */}
                         <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
-                          {/* Image - square */}
-                          <div className="aspect-square w-32 shrink-0 sm:w-36">
-                            {images[item.id]?.status === "loading" && (
-                              <div className="flex h-full w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100">
-                                <p className="text-xs text-slate-400">
-                                  Generating image...
-                                </p>
-                              </div>
-                            )}
-                            {images[item.id]?.status === "error" && (
-                              <div className="flex h-full w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100">
-                                <p className="text-xs text-rose-500">
-                                  {images[item.id]?.error}
-                                </p>
-                              </div>
-                            )}
+                          {/* Image - square + download */}
+                          <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
+                            <div className="aspect-square w-full">
+                              {images[item.id]?.status === "loading" && (
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                  <p className="text-xs text-slate-400">
+                                    Generating image...
+                                  </p>
+                                </div>
+                              )}
+                              {images[item.id]?.status === "error" && (
+                                <div className="flex h-full w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100">
+                                  <p className="text-xs text-rose-500">
+                                    {images[item.id]?.error}
+                                  </p>
+                                </div>
+                              )}
+                              {images[item.id]?.status === "ready" &&
+                                images[item.id]?.url && (
+                                  <button
+                                    type="button"
+                                    className="block h-full w-full cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                    onClick={() =>
+                                      downloadFile(
+                                        images[item.id]?.url ?? "",
+                                        `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`,
+                                      )
+                                    }
+                                  >
+                                    <img
+                                      className="h-full w-full object-cover"
+                                      src={images[item.id]?.url}
+                                      alt={`Illustration for ${item.title}`}
+                                    />
+                                  </button>
+                                )}
+                              {(!images[item.id]?.status ||
+                                images[item.id]?.status === "idle") && (
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                  <p className="text-xs text-slate-400">
+                                    Preparing image...
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                             {images[item.id]?.status === "ready" &&
                               images[item.id]?.url && (
                                 <button
                                   type="button"
-                                  className="block h-full w-full cursor-zoom-in overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
                                   onClick={() =>
-                                    setFocusImage({
-                                      url: images[item.id]?.url ?? "",
-                                      title: item.title,
-                                    })
+                                    downloadFile(
+                                      images[item.id]?.url ?? "",
+                                      `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`,
+                                    )
                                   }
+                                  className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                                 >
-                                  <img
-                                    className="h-full w-full object-cover"
-                                    src={images[item.id]?.url}
-                                    alt={`Illustration for ${item.title}`}
-                                  />
+                                  <svg
+                                    className="h-3 w-3"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3"
+                                    />
+                                  </svg>
+                                  Save image
                                 </button>
                               )}
-                            {!images[item.id]?.status && (
-                              <div className="h-full w-full rounded-xl border border-slate-200 bg-slate-100" />
-                            )}
                           </div>
-                          {/* Video - square, next to image */}
-                          <div className="aspect-square w-32 shrink-0 sm:w-36">
-                            {!videos[item.id]?.status &&
-                              images[item.id]?.status === "ready" && (
-                                <button
-                                  type="button"
-                                  onClick={() => requestVideo(item)}
-                                  className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-slate-400 hover:bg-slate-100"
-                                >
-                                  <span className="text-2xl">▶</span>
-                                  <span className="text-xs font-semibold">
-                                    Generate video
-                                  </span>
-                                </button>
+                          {/* Video - square + download */}
+                          <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
+                            <div className="aspect-square w-full">
+                              {!videos[item.id]?.status &&
+                                images[item.id]?.status !== "ready" &&
+                                images[item.id]?.status !== "error" && (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                    <p className="text-xs text-slate-400">
+                                      Waiting for image...
+                                    </p>
+                                  </div>
+                                )}
+                              {!videos[item.id]?.status &&
+                                images[item.id]?.status === "ready" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => requestVideo(item)}
+                                    className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-slate-400 hover:bg-slate-100"
+                                  >
+                                    <span className="text-2xl">▶</span>
+                                    <span className="text-xs font-semibold">
+                                      Generate video
+                                    </span>
+                                  </button>
+                                )}
+                              {(videos[item.id]?.status === "loading" ||
+                                videos[item.id]?.status === "polling") && (
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                  <p className="text-xs text-slate-400">
+                                    {videos[item.id]?.status === "polling"
+                                      ? "Generating..."
+                                      : "Starting..."}
+                                  </p>
+                                </div>
                               )}
-                            {(videos[item.id]?.status === "loading" ||
-                              videos[item.id]?.status === "polling") && (
-                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
-                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
-                                <p className="text-xs text-slate-400">
-                                  {videos[item.id]?.status === "polling"
-                                    ? "Generating..."
-                                    : "Starting..."}
-                                </p>
-                              </div>
-                            )}
-                            {videos[item.id]?.status === "error" && (
-                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
-                                <p className="text-xs text-rose-500">
-                                  {videos[item.id]?.error}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => requestVideo(item)}
-                                  className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200"
-                                >
-                                  Retry
-                                </button>
-                              </div>
-                            )}
-                            {videos[item.id]?.status === "ready" &&
-                              videos[item.id]?.url && (
-                                <button
-                                  type="button"
-                                  className="block h-full w-full cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black focus:outline-none focus:ring-2 focus:ring-slate-400"
-                                  onClick={() =>
-                                    setFocusVideo({
-                                      url: videos[item.id]?.url ?? "",
-                                      title: item.title,
-                                    })
-                                  }
-                                >
-                                  <video
-                                    className="h-full w-full object-cover"
-                                    src={videos[item.id]?.url}
-                                    muted
-                                    playsInline
-                                    loop
-                                    autoPlay
-                                  />
-                                </button>
+                              {videos[item.id]?.status === "error" && (
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                  <p className="text-xs text-rose-500">
+                                    {videos[item.id]?.error}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => requestVideo(item)}
+                                    className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200"
+                                  >
+                                    Retry
+                                  </button>
+                                </div>
                               )}
+                              {videos[item.id]?.status === "ready" &&
+                                videos[item.id]?.url && (
+                                  <button
+                                    type="button"
+                                    className="block h-full w-full cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                    onClick={() =>
+                                      setFocusVideo({
+                                        url: videos[item.id]?.url ?? "",
+                                        title: item.title,
+                                      })
+                                    }
+                                  >
+                                    <video
+                                      className="h-full w-full object-cover"
+                                      src={videos[item.id]?.url}
+                                      muted
+                                      playsInline
+                                      loop
+                                      autoPlay
+                                    />
+                                  </button>
+                                )}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={videos[item.id]?.status !== "ready"}
+                              onClick={() =>
+                                downloadFile(
+                                  videos[item.id]?.url ?? "",
+                                  `${item.title.replace(/\s+/g, "-").toLowerCase()}-video.mp4`,
+                                )
+                              }
+                              className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-white"
+                            >
+                              <svg
+                                className="h-3 w-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3"
+                                />
+                              </svg>
+                              Save video
+                            </button>
                           </div>
                         </div>
                         {/* Text content */}
@@ -1523,6 +1639,8 @@ export default function Home() {
           </div>
         )}
       </div>
+      {/* Hidden anchor used by downloadFile */}
+      <a ref={downloadRef} className="hidden" />
     </div>
   );
 }

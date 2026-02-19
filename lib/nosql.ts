@@ -4,6 +4,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -680,4 +681,146 @@ export const listMedia = async (
     return true;
   });
   return Promise.all(records.map(resolveMediaUrl));
+};
+
+/* ------------------------------------------------------------------ */
+/*  Gallery: list all media across classes/sessions (paginated)        */
+/* ------------------------------------------------------------------ */
+
+export type GalleryItem = {
+  media_id: string;
+  content_item_id: string;
+  media_type: "image" | "video";
+  mime_type: string;
+  url: string;
+  class_id: string;
+  session_id: string;
+  student_id: string;
+  created_at: string;
+  s3_key?: string;
+};
+
+export type GalleryPage = {
+  items: GalleryItem[];
+  nextCursor: string | null;
+};
+
+export const listAllMedia = async (options: {
+  mediaType?: "image" | "video";
+  search?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<GalleryPage> => {
+  const { mediaType = "image", search, limit = 30, cursor } = options;
+
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return { items: [], nextCursor: null };
+
+    // Filter by record_type + media_type in DynamoDB; do search filtering
+    // in JS so it's case-insensitive and can match across multiple fields.
+    const allRecords: MediaRecord[] = [];
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+
+    do {
+      const result = await client.send(
+        new ScanCommand({
+          TableName: dynamoTableName,
+          FilterExpression: "#rt = :media AND #mt = :mt",
+          ExpressionAttributeNames: { "#rt": "record_type", "#mt": "media_type" },
+          ExpressionAttributeValues: { ":media": "media", ":mt": mediaType },
+          ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+        }),
+      );
+
+      for (const item of result.Items ?? []) {
+        allRecords.push({
+          media_id: (item.media_id as string) ?? "",
+          content_item_id: (item.content_item_id as string) ?? "",
+          media_type: (item.media_type as "image" | "video") ?? "image",
+          mime_type: (item.mime_type as string) ?? "",
+          data_url: item.data_url as string | undefined,
+          s3_bucket: item.s3_bucket as string | undefined,
+          s3_key: item.s3_key as string | undefined,
+          class_id: (item.class_id as string) ?? "",
+          session_id: (item.session_id as string) ?? "",
+          student_id: ((item.student_id as string) ?? "").replace(/^STUDENT#/, ""),
+          created_at: (item.created_at as string) ?? "",
+        });
+      }
+
+      exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (exclusiveStartKey);
+
+    // Case-insensitive search across multiple fields (matches local JSON path)
+    const filtered = search
+      ? allRecords.filter((m) => {
+          const q = search.toLowerCase();
+          const haystack = `${m.content_item_id} ${m.class_id} ${m.session_id} ${m.student_id}`.toLowerCase();
+          return haystack.includes(q);
+        })
+      : allRecords;
+
+    filtered.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    const startIndex = cursor ? parseInt(cursor, 10) : 0;
+    const page = filtered.slice(startIndex, startIndex + limit);
+    const resolved = await Promise.all(page.map(resolveMediaUrl));
+    const hasMore = startIndex + limit < filtered.length;
+
+    return {
+      items: resolved.map((r) => ({
+        media_id: r.media_id,
+        content_item_id: r.content_item_id,
+        media_type: r.media_type,
+        mime_type: r.mime_type,
+        url: r.data_url ?? "",
+        class_id: r.class_id,
+        session_id: r.session_id,
+        student_id: r.student_id,
+        created_at: r.created_at,
+        s3_key: r.s3_key,
+      })),
+      nextCursor: hasMore ? String(startIndex + limit) : null,
+    };
+  }
+
+  // Local JSON fallback
+  const store = await loadStore();
+  let records = store.media.filter((m) => {
+    if (mediaType && m.media_type !== mediaType) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const haystack = `${m.content_item_id} ${m.class_id} ${m.session_id} ${m.student_id}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+
+  records.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+
+  const startIndex = cursor ? parseInt(cursor, 10) : 0;
+  const page = records.slice(startIndex, startIndex + limit);
+  const resolved = await Promise.all(page.map(resolveMediaUrl));
+  const hasMore = startIndex + limit < records.length;
+
+  return {
+    items: resolved.map((r) => ({
+      media_id: r.media_id,
+      content_item_id: r.content_item_id,
+      media_type: r.media_type,
+      mime_type: r.mime_type,
+      url: r.data_url ?? "",
+      class_id: r.class_id,
+      session_id: r.session_id,
+      student_id: r.student_id,
+      created_at: r.created_at,
+      s3_key: r.s3_key,
+    })),
+    nextCursor: hasMore ? String(startIndex + limit) : null,
+  };
 };
