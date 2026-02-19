@@ -725,6 +725,18 @@ export type GalleryPage = {
   nextCursor: string | null;
 };
 
+const toEpochMs = (value: string | undefined) => {
+  const parsed = Date.parse(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const sortByMostRecentMedia = (a: MediaRecord, b: MediaRecord) => {
+  const timeDiff = toEpochMs(b.created_at) - toEpochMs(a.created_at);
+  if (timeDiff !== 0) return timeDiff;
+  // Deterministic fallback when timestamps are identical/missing.
+  return b.media_id.localeCompare(a.media_id);
+};
+
 export const listAllMedia = async (options: {
   mediaType?: "image" | "video";
   search?: string;
@@ -781,9 +793,7 @@ export const listAllMedia = async (options: {
         })
       : allRecords;
 
-    filtered.sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
+    filtered.sort(sortByMostRecentMedia);
 
     const startIndex = cursor ? parseInt(cursor, 10) : 0;
     const page = filtered.slice(startIndex, startIndex + limit);
@@ -819,9 +829,7 @@ export const listAllMedia = async (options: {
     return true;
   });
 
-  records.sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  );
+  records.sort(sortByMostRecentMedia);
 
   const startIndex = cursor ? parseInt(cursor, 10) : 0;
   const page = records.slice(startIndex, startIndex + limit);
