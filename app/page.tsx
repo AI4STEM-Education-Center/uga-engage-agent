@@ -1373,12 +1373,12 @@ export default function Home() {
                                 images[item.id]?.url && (
                                   <button
                                     type="button"
-                                    className="block h-full w-full cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
+                                    className="block h-full w-full cursor-zoom-in overflow-hidden rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
                                     onClick={() =>
-                                      downloadFile(
-                                        images[item.id]?.url ?? "",
-                                        `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`,
-                                      )
+                                      setFocusImage({
+                                        url: images[item.id]?.url ?? "",
+                                        title: item.title,
+                                      })
                                     }
                                   >
                                     <img
@@ -1398,34 +1398,32 @@ export default function Home() {
                                 </div>
                               )}
                             </div>
-                            {images[item.id]?.status === "ready" &&
-                              images[item.id]?.url && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    downloadFile(
-                                      images[item.id]?.url ?? "",
-                                      `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`,
-                                    )
-                                  }
-                                  className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
-                                >
-                                  <svg
-                                    className="h-3 w-3"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3"
-                                    />
-                                  </svg>
-                                  Save image
-                                </button>
-                              )}
+                            <button
+                              type="button"
+                              disabled={images[item.id]?.status !== "ready"}
+                              onClick={() =>
+                                downloadFile(
+                                  images[item.id]?.url ?? "",
+                                  `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`,
+                                )
+                              }
+                              className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-white"
+                            >
+                              <svg
+                                className="h-3 w-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3"
+                                />
+                              </svg>
+                              Save image
+                            </button>
                           </div>
                           {/* Video - square + download */}
                           <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">

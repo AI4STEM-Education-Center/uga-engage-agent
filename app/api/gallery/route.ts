@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listAllMedia } from "@/lib/nosql";
 
+export const maxDuration = 60;
+
 /**
  * GET /api/gallery
  *

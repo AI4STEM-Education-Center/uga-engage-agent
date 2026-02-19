@@ -21,6 +21,7 @@ const PAGE_SIZE = 12;
 export default function CommunityGallery() {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -33,6 +34,7 @@ export default function CommunityGallery() {
   const fetchPage = useCallback(
     async (pageCursor: string | null, pageNumber: number) => {
       setLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams({
           type: mediaType,
@@ -42,7 +44,13 @@ export default function CommunityGallery() {
         if (pageCursor) params.set("cursor", pageCursor);
 
         const res = await fetch(`/api/gallery?${params}`);
-        if (!res.ok) throw new Error("Failed to load gallery.");
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            (body as Record<string, string>)?.error ??
+              `Gallery request failed (${res.status}).`,
+          );
+        }
         const data = await res.json();
 
         const newItems: GalleryItem[] = data.items ?? [];
@@ -57,6 +65,7 @@ export default function CommunityGallery() {
         });
       } catch (err) {
         console.error("Gallery fetch error:", err);
+        setError(err instanceof Error ? err.message : "Failed to load gallery.");
         setHasMore(false);
       } finally {
         setLoading(false);
@@ -217,7 +226,21 @@ export default function CommunityGallery() {
           </div>
         )}
 
-        {!loading && items.length === 0 && (
+        {!loading && error && (
+          <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-700">
+            <p className="font-semibold">Something went wrong</p>
+            <p className="mt-1 text-rose-500">{error}</p>
+            <button
+              type="button"
+              onClick={() => goToPage(page)}
+              className="mt-3 rounded-full border border-rose-200 bg-white px-4 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && items.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 py-32 text-slate-400">
             <svg className="h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -244,7 +267,13 @@ export default function CommunityGallery() {
                     onClick={() => setFocusItem(item)}
                     className="relative aspect-square w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400"
                   >
-                    {item.media_type === "image" ? (
+                    {!item.url ? (
+                      <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-300">
+                        <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    ) : item.media_type === "image" ? (
                       <img
                         src={item.url}
                         alt={item.content_item_id}
