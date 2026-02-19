@@ -66,25 +66,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Return x.ai URL directly (per docs: GET returns video.url when done)
-    // Optionally persist to storage in background (don't block response)
+    // Persist video to S3/DB before responding — must be awaited because
+    // serverless Lambdas freeze after the response is sent.
     if (contentItemId && classId && sessionId && studentId) {
-      fetch(videoUrl)
-        .then((r) => r.arrayBuffer())
-        .then((buf) => {
-          const base64 = Buffer.from(buf).toString("base64");
-          const dataUrl = `data:video/mp4;base64,${base64}`;
-          return upsertMedia({
-            classId,
-            sessionId,
-            studentId,
-            contentItemId,
-            mediaType: "video",
-            mimeType: "video/mp4",
-            dataUrl,
-          });
-        })
-        .catch((err) => console.error("Background video persist failed:", err));
+      try {
+        const videoRes = await fetch(videoUrl);
+        const buf = await videoRes.arrayBuffer();
+        const base64 = Buffer.from(buf).toString("base64");
+        const dataUrl = `data:video/mp4;base64,${base64}`;
+        await upsertMedia({
+          classId,
+          sessionId,
+          studentId,
+          contentItemId,
+          mediaType: "video",
+          mimeType: "video/mp4",
+          dataUrl,
+        });
+      } catch (err) {
+        console.error("Video persist failed:", err);
+      }
     }
 
     return NextResponse.json({
