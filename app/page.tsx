@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import mockStudents from "@/mock-data/students.json";
@@ -52,6 +52,86 @@ type StudentStrategyResult = {
   id: string;
   name: string;
   plan: Plan;
+};
+
+type PersistedDraft = {
+  version: number;
+  classId: string;
+  sessionId: string;
+  studentId: string | null;
+  currentStep: number;
+  mockIndex: number;
+  plan: Plan | null;
+  selectedStrategies: string[];
+  annotationDecision: "agree" | "disagree" | null;
+  annotationReason: string;
+  annotationStatus: "idle" | "saved";
+  content: ContentItem[];
+};
+
+const DRAFT_STORAGE_KEY = "engage-agent:draft:v1";
+const DRAFT_VERSION = 1;
+
+const clampStep = (value: number) => Math.min(3, Math.max(1, value));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parsePersistedDraft = (value: string): PersistedDraft | null => {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed)) return null;
+    if (parsed.version !== DRAFT_VERSION) return null;
+    if (typeof parsed.classId !== "string") return null;
+    if (typeof parsed.sessionId !== "string") return null;
+    if (
+      parsed.studentId !== null &&
+      typeof parsed.studentId !== "string" &&
+      typeof parsed.studentId !== "undefined"
+    ) {
+      return null;
+    }
+    if (!Array.isArray(parsed.selectedStrategies)) return null;
+    if (!Array.isArray(parsed.content)) return null;
+    const content = parsed.content
+      .filter((item): item is Record<string, unknown> => isRecord(item))
+      .map((item) => ({
+        id: String(item.id ?? ""),
+        type: String(item.type ?? ""),
+        title: String(item.title ?? ""),
+        body: String(item.body ?? ""),
+        strategy: String(item.strategy ?? ""),
+      }))
+      .filter(
+        (item) =>
+          item.id && item.type && item.title && item.body && item.strategy,
+      );
+
+    return {
+      version: DRAFT_VERSION,
+      classId: parsed.classId,
+      sessionId: parsed.sessionId,
+      studentId:
+        typeof parsed.studentId === "string" ? parsed.studentId : (null as null),
+      currentStep: clampStep(Number(parsed.currentStep) || 1),
+      mockIndex: Math.max(0, Number(parsed.mockIndex) || 0),
+      plan: isRecord(parsed.plan) ? (parsed.plan as Plan) : null,
+      selectedStrategies: parsed.selectedStrategies
+        .filter((strategy): strategy is string => typeof strategy === "string")
+        .filter(Boolean),
+      annotationDecision:
+        parsed.annotationDecision === "agree" ||
+        parsed.annotationDecision === "disagree"
+          ? parsed.annotationDecision
+          : null,
+      annotationReason:
+        typeof parsed.annotationReason === "string" ? parsed.annotationReason : "",
+      annotationStatus: parsed.annotationStatus === "saved" ? "saved" : "idle",
+      content,
+    };
+  } catch {
+    return null;
+  }
 };
 
 const assignmentLabel =
@@ -146,6 +226,7 @@ const strategies = [
 
 export default function Home() {
   const downloadRef = useRef<HTMLAnchorElement>(null);
+  const previousStudentIdRef = useRef<string | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [images, setImages] = useState<Record<string, ImageState>>({});
@@ -188,6 +269,8 @@ export default function Home() {
   }>({ processed: 0, total: 0, currentName: "" });
   const [showStudentRecommendations, setShowStudentRecommendations] =
     useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isRestoringDraftMedia, setIsRestoringDraftMedia] = useState(false);
   const mockStudentList = mockStudents as MockStudent[];
   const currentMock = mockStudentList[mockIndex];
   const getStrategyLabel = (strategyId: string) =>
@@ -226,6 +309,155 @@ export default function Home() {
       anchor.click();
     }
   };
+
+  const loadCachedMedia = useCallback(
+    async (items: ContentItem[], studentIdVal?: string) => {
+      if (!studentIdVal || !classId || !sessionId || items.length === 0) {
+        return;
+      }
+      try {
+        const mediaUrl = `/api/media?classId=${encodeURIComponent(classId)}&sessionId=${encodeURIComponent(sessionId)}&studentId=${encodeURIComponent(studentIdVal)}`;
+        const mediaRes = await fetch(mediaUrl);
+        if (!mediaRes.ok) {
+          return;
+        }
+        const mediaData = await mediaRes.json();
+        const records = mediaData.results ?? [];
+        const cachedImages: Record<string, ImageState> = {};
+        const cachedVideos: Record<string, VideoState> = {};
+        for (const rec of records) {
+          if (rec.media_type === "image" && rec.data_url) {
+            cachedImages[rec.content_item_id] = {
+              status: "ready",
+              url: rec.data_url,
+            };
+          }
+          if (rec.media_type === "video" && rec.data_url) {
+            cachedVideos[rec.content_item_id] = {
+              status: "ready",
+              url: rec.data_url,
+            };
+          }
+        }
+        if (Object.keys(cachedImages).length > 0) {
+          setImages(cachedImages);
+        }
+        if (Object.keys(cachedVideos).length > 0) {
+          setVideos(cachedVideos);
+        }
+      } catch {
+        // Ignore cache load errors — images/videos will be regenerated
+      }
+    },
+    [classId, sessionId],
+  );
+
+  useEffect(() => {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    const draft = raw ? parsePersistedDraft(raw) : null;
+    if (!draft) {
+      setIsHydrated(true);
+      return;
+    }
+    if (draft.classId !== classId || draft.sessionId !== sessionId) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      setIsHydrated(true);
+      return;
+    }
+
+    const indexFromStudentId = draft.studentId
+      ? mockStudentList.findIndex((student) => student.id === draft.studentId)
+      : -1;
+    const resolvedMockIndex =
+      indexFromStudentId >= 0
+        ? indexFromStudentId
+        : Math.min(Math.max(draft.mockIndex, 0), mockStudentList.length - 1);
+    const restoredStudentId = mockStudentList[resolvedMockIndex]?.id;
+
+    setMockIndex(resolvedMockIndex);
+    setPlan(draft.plan);
+    setSelectedStrategies(draft.selectedStrategies);
+    setAnnotationDecision(draft.annotationDecision);
+    setAnnotationReason(draft.annotationReason);
+    setAnnotationStatus(draft.annotationStatus);
+    setAnnotationError(null);
+    setContent(draft.content);
+    setImages({});
+    setVideos({});
+    setError(null);
+    setCurrentStep(clampStep(draft.currentStep));
+
+    if (draft.content.length > 0 && restoredStudentId) {
+      setIsRestoringDraftMedia(true);
+      void loadCachedMedia(draft.content, restoredStudentId).finally(() => {
+        setIsRestoringDraftMedia(false);
+      });
+    }
+    setIsHydrated(true);
+  }, [classId, sessionId, mockStudentList, loadCachedMedia]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      const draft: PersistedDraft = {
+        version: DRAFT_VERSION,
+        classId,
+        sessionId,
+        studentId: currentMock?.id ?? null,
+        currentStep: clampStep(currentStep),
+        mockIndex,
+        plan,
+        selectedStrategies,
+        annotationDecision,
+        annotationReason,
+        annotationStatus: annotationStatus === "saved" ? "saved" : "idle",
+        content,
+      };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [
+    isHydrated,
+    classId,
+    sessionId,
+    currentMock?.id,
+    currentStep,
+    mockIndex,
+    plan,
+    selectedStrategies,
+    annotationDecision,
+    annotationReason,
+    annotationStatus,
+    content,
+  ]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+    const studentId = currentMock?.id ?? null;
+    if (
+      previousStudentIdRef.current &&
+      studentId &&
+      previousStudentIdRef.current !== studentId
+    ) {
+      setPlan(null);
+      setContent([]);
+      setImages({});
+      setVideos({});
+      setSelectedStrategies([]);
+      setAnnotationDecision(null);
+      setAnnotationReason("");
+      setAnnotationStatus("idle");
+      setAnnotationError(null);
+      setError(null);
+      setCurrentStep(1);
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }
+    previousStudentIdRef.current = studentId;
+  }, [isHydrated, currentMock?.id]);
 
   const requestPlan = async () => {
     setLoadingPlan(true);
@@ -308,40 +540,7 @@ export default function Home() {
 
       // Try to load cached media for these content items
       const studentIdVal = currentMock?.id;
-      if (studentIdVal && classId && sessionId && items.length > 0) {
-        try {
-          const mediaUrl = `/api/media?classId=${encodeURIComponent(classId)}&sessionId=${encodeURIComponent(sessionId)}&studentId=${encodeURIComponent(studentIdVal)}`;
-          const mediaRes = await fetch(mediaUrl);
-          if (mediaRes.ok) {
-            const mediaData = await mediaRes.json();
-            const records = mediaData.results ?? [];
-            const cachedImages: Record<string, ImageState> = {};
-            const cachedVideos: Record<string, VideoState> = {};
-            for (const rec of records) {
-              if (rec.media_type === "image" && rec.data_url) {
-                cachedImages[rec.content_item_id] = {
-                  status: "ready",
-                  url: rec.data_url,
-                };
-              }
-              if (rec.media_type === "video" && rec.data_url) {
-                cachedVideos[rec.content_item_id] = {
-                  status: "ready",
-                  url: rec.data_url,
-                };
-              }
-            }
-            if (Object.keys(cachedImages).length > 0) {
-              setImages(cachedImages);
-            }
-            if (Object.keys(cachedVideos).length > 0) {
-              setVideos(cachedVideos);
-            }
-          }
-        } catch {
-          // Ignore cache load errors — images/videos will be regenerated
-        }
-      }
+      await loadCachedMedia(items, studentIdVal);
 
       setCurrentStep(3);
     } catch (err) {
@@ -543,6 +742,9 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (isRestoringDraftMedia) {
+      return;
+    }
     if (!content.length) {
       return;
     }
@@ -622,7 +824,7 @@ export default function Home() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content]);
+  }, [content, isRestoringDraftMedia]);
 
   const requestVideo = async (item: ContentItem) => {
     const imageUrl = images[item.id]?.url;
