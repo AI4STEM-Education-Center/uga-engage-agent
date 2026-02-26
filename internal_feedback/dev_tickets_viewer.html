@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dev Tickets Viewer</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --accent: #0f766e;
+      --accent-soft: #ccfbf1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .sub {
+      margin: 0 0 20px;
+      color: var(--muted);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    .stats {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .pill {
+      background: var(--accent-soft);
+      color: #115e59;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px 8px;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      color: #374151;
+      background: #f9fafb;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tbody tr:hover {
+      background: #fcfcfd;
+    }
+
+    .tag {
+      display: inline-block;
+      border: 1px solid #99f6e4;
+      color: #115e59;
+      background: #f0fdfa;
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 2px 8px;
+      font-weight: 600;
+    }
+
+    .title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    details summary {
+      cursor: pointer;
+      color: #0f766e;
+    }
+
+    .error {
+      color: #991b1b;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .fallback {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px dashed #9ca3af;
+      border-radius: 8px;
+      background: #f9fafb;
+      font-size: 13px;
+      color: #374151;
+    }
+
+    .fallback input {
+      margin-top: 8px;
+    }
+
+    @media (max-width: 860px) {
+      .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .controls {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Dev Tickets Viewer</h1>
+    <p class="sub">Visualize <code>internal_feedback/dev_tickets.json</code> with search and filters.</p>
+
+    <div class="panel">
+      <div class="controls">
+        <div class="field">
+          <label for="search">Search title or description</label>
+          <input id="search" type="text" placeholder="Try: recommendation, language, onboarding">
+        </div>
+
+        <div class="field">
+          <label for="feedbackFilter">Feedback Number</label>
+          <select id="feedbackFilter">
+            <option value="">All</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="assigneeFilter">Assignee</label>
+          <select id="assigneeFilter">
+            <option value="">All</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="sortBy">Sort</label>
+          <select id="sortBy">
+            <option value="ticket_id">Ticket ID (asc)</option>
+            <option value="feedback_number">Feedback Number (asc)</option>
+            <option value="title">Title (A-Z)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+      <div class="meta">
+        <span id="loadStatus">Loading tickets...</span>
+        <span id="resultCount"></span>
+      </div>
+    </div>
+
+    <div class="panel table-wrap">
+      <div id="errorBox" style="display:none;" class="error"></div>
+      <div id="fallbackBox" style="display:none;" class="fallback">
+        <div><strong>Load local JSON file</strong></div>
+        <div>If opened directly from Finder, select <code>dev_tickets.json</code> from this folder.</div>
+        <input id="filePicker" type="file" accept=".json,application/json">
+      </div>
+      <table aria-label="Dev tickets table">
+        <thead>
+          <tr>
+            <th>Ticket ID</th>
+            <th>Feedback</th>
+            <th>Title</th>
+            <th>Assignee</th>
+            <th>Description</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+</div>
+
+  <script src="./dev_tickets_data.js"></script>
+  <script>
+    const state = {
+      tickets: [],
+      filtered: []
+    };
+
+    const tableBody = document.getElementById("tableBody");
+    const searchInput = document.getElementById("search");
+    const feedbackFilter = document.getElementById("feedbackFilter");
+    const assigneeFilter = document.getElementById("assigneeFilter");
+    const sortBy = document.getElementById("sortBy");
+    const stats = document.getElementById("stats");
+    const loadStatus = document.getElementById("loadStatus");
+    const resultCount = document.getElementById("resultCount");
+    const errorBox = document.getElementById("errorBox");
+    const fallbackBox = document.getElementById("fallbackBox");
+    const filePicker = document.getElementById("filePicker");
+
+    function normAssignee(value) {
+      if (value === null || value === undefined || value === "") return "(unassigned)";
+      return String(value);
+    }
+
+    function renderStats(tickets) {
+      const total = tickets.length;
+      const assigned = tickets.filter((t) => normAssignee(t.assignee) !== "(unassigned)").length;
+      const unassigned = total - assigned;
+
+      stats.innerHTML = `
+        <span class="pill">Total: ${total}</span>
+        <span class="pill">Assigned: ${assigned}</span>
+        <span class="pill">Unassigned: ${unassigned}</span>
+      `;
+    }
+
+    function renderRows(tickets) {
+      if (!tickets.length) {
+        tableBody.innerHTML = `<tr><td colspan="6">No tickets match the current filters.</td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = tickets.map((ticket) => {
+        const assignee = normAssignee(ticket.assignee);
+        const description = ticket.description || "";
+        const short = description.length > 200 ? `${description.slice(0, 200)}...` : description;
+        const reference = ticket.reference || "";
+        return `
+          <tr id="ticket-${ticket.ticket_id}">
+            <td><span class="tag">${ticket.ticket_id ?? "-"}</span></td>
+            <td>#${ticket.feedback_number ?? "-"}</td>
+            <td><div class="title">${ticket.title ?? "(no title)"}</div></td>
+            <td>${assignee}</td>
+            <td>
+              <details>
+                <summary>${short}</summary>
+                <div style="margin-top:8px;">${description}</div>
+              </details>
+            </td>
+            <td>${reference}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function applyFilters() {
+      const query = searchInput.value.trim().toLowerCase();
+      const feedback = feedbackFilter.value;
+      const assignee = assigneeFilter.value;
+      const sort = sortBy.value;
+
+      let rows = state.tickets.filter((t) => {
+        if (feedback && String(t.feedback_number) !== feedback) return false;
+        if (assignee && normAssignee(t.assignee) !== assignee) return false;
+
+        if (!query) return true;
+        const haystack = `${t.title || ""} ${t.description || ""}`.toLowerCase();
+        return haystack.includes(query);
+      });
+
+      rows.sort((a, b) => {
+        if (sort === "title") return String(a.title || "").localeCompare(String(b.title || ""));
+        const aVal = Number(a[sort] ?? 0);
+        const bVal = Number(b[sort] ?? 0);
+        return aVal - bVal;
+      });
+
+      state.filtered = rows;
+      renderRows(rows);
+      resultCount.textContent = `Showing ${rows.length} ticket(s)`;
+    }
+
+    function initFilters(tickets) {
+      const feedbackNumbers = [...new Set(tickets.map((t) => t.feedback_number).filter((v) => v !== undefined && v !== null))]
+        .sort((a, b) => Number(a) - Number(b));
+
+      const assignees = [...new Set(tickets.map((t) => normAssignee(t.assignee)))]
+        .sort((a, b) => a.localeCompare(b));
+
+      feedbackFilter.innerHTML = `<option value="">All</option>` +
+        feedbackNumbers.map((n) => `<option value="${n}">#${n}</option>`).join("");
+
+      assigneeFilter.innerHTML = `<option value="">All</option>` +
+        assignees.map((a) => `<option value="${a}">${a}</option>`).join("");
+    }
+
+    function useData(data, sourceLabel) {
+      if (!data || !Array.isArray(data.tickets)) {
+        throw new Error("Invalid JSON format. Expected an object with a tickets array.");
+      }
+      state.tickets = data.tickets;
+      initFilters(state.tickets);
+      renderStats(state.tickets);
+      applyFilters();
+      loadStatus.textContent = `Loaded ${sourceLabel}`;
+      errorBox.style.display = "none";
+      fallbackBox.style.display = "none";
+    }
+
+    async function loadTickets() {
+      try {
+        if (window.DEV_TICKETS_DATA) {
+          useData(window.DEV_TICKETS_DATA, "dev_tickets_data.js");
+          return;
+        }
+
+        const response = await fetch("./dev_tickets.json", { cache: "no-store" });
+        if (!response.ok) throw new Error(`Failed to fetch JSON (${response.status})`);
+        const data = await response.json();
+        useData(data, "dev_tickets.json");
+      } catch (error) {
+        errorBox.style.display = "block";
+        errorBox.textContent = "Failed to fetch dev_tickets.json. Use the file picker below or run a local server.";
+        fallbackBox.style.display = "block";
+        loadStatus.textContent = "Load failed";
+      }
+    }
+
+    [searchInput, feedbackFilter, assigneeFilter, sortBy].forEach((el) => {
+      el.addEventListener("input", applyFilters);
+      el.addEventListener("change", applyFilters);
+    });
+
+    filePicker.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        useData(data, file.name);
+      } catch (error) {
+        errorBox.style.display = "block";
+        errorBox.textContent = `Could not read selected file: ${error.message}`;
+        loadStatus.textContent = "File load failed";
+      }
+    });
+
+    loadTickets();
+  </script>
+</body>
+</html>
