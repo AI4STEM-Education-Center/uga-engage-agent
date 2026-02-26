@@ -20,7 +20,11 @@ type ContentItem = {
   body: string;
 };
 
-const buildPrompt = (item: ContentItem, plan: Plan | null, answers: Answers) => {
+const buildPrompt = (
+  item: ContentItem,
+  plan: Plan | null,
+  answers: Answers,
+) => {
   const topic = answers.topic?.trim() || "gravity";
   const gradeLevel = "8th grade";
   const planName = plan?.name ?? "Engagement plan";
