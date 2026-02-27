@@ -252,7 +252,7 @@
     </div>
 </div>
 
-  <script src="./dev_tickets_data.js"></script>
+  <script src="../internal_feedback/dev_tickets_data.js"></script>
   <script>
     const state = {
       tickets: [],
@@ -378,7 +378,7 @@
           return;
         }
 
-        const response = await fetch("./dev_tickets.json", { cache: "no-store" });
+        const response = await fetch("../internal_feedback/dev_tickets.json", { cache: "no-store" });
         if (!response.ok) throw new Error(`Failed to fetch JSON (${response.status})`);
         const data = await response.json();
         useData(data, "dev_tickets.json");
