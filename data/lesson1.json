@@ -1,0 +1,112 @@
+{
+  "lesson_number": 1,
+  "lesson_title": "Lesson 1",
+  "core_ideas": [
+    "1) In a collision between two objects, the objects have to come into contact; sometimes something is damaged, but not always.",
+    "Different factors and variables may cause objects to be damaged or not damaged in a collision."
+  ],
+  "misconceptions": [
+    "a) If nothing looks damaged after the collision, the force must have",
+    "been weak.",
+    "b) Heavier objects always cause more damage. (not thinking about other",
+    "factors)"
+  ],
+  "quiz_items": [
+    {
+      "item_id": "L1_Q1",
+      "type": "multiple_choice",
+      "question_number": 1,
+      "stem": "A phone drops onto a soft pillow. The phone looks the same afterward. Which statement best describes the collision?",
+      "options": {
+        "A": "The force was weak because nothing was damaged.",
+        "B": "The phone and pillow pushed on each other.",
+        "C": "Soft objects cannot exert forces.",
+        "D": "Only the phone pushed; the pillow did not."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L1_Q1_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L1_Q3",
+      "type": "multiple_choice",
+      "question_number": 3,
+      "stem": "A bug hits a car windshield while the car is moving on the highway. The windshield looks the same afterward. Which statement best describes the collision?",
+      "options": {
+        "A": "The force must have been weak because the windshield was not damaged.",
+        "B": "The bug and the windshield pushed on each other during contact.",
+        "C": "The windshield exerted a force, but the bug did not because it is small.",
+        "D": "There was no collision because the windshield did not change shape."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L1_Q3_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L1_Q2",
+      "type": "multiple_choice",
+      "question_number": 2,
+      "stem": "A heavy bowling ball hits the same window very slowly. A light golf ball hits a window very fast. The bowling ball does break the window, but the golf ball broke the window. Which statement best explain it?",
+      "options": {
+        "A": "Heavier objects always cause more damage.",
+        "B": "Speed can matter as well as mass.",
+        "C": "The window must have been defective.",
+        "D": "Smaller objects have stronger gravity."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L1_Q2_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L1_Q4",
+      "type": "multiple_choice",
+      "question_number": 4,
+      "stem": "A large truck and a small compact car collide head on. The car is badly crumpled, but the truck shows much less damage. Which statement best explains why the damage differs?",
+      "options": {
+        "A": "The truck must have exerted a much larger force to the car.",
+        "B": "Damage depends on factors such as materials and design of each object, not only mass.",
+        "C": "The car was damaged because it exerted no force on the truck.",
+        "D": "The truck was less damaged because smaller objects have less gravity."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L1_Q4_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    }
+  ]
+}

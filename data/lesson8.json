@@ -1,0 +1,120 @@
+{
+  "lesson_number": 8,
+  "lesson_title": "Lesson 8",
+  "core_ideas": [
+    "1) The more force you apply to an object the more that object speeds up.",
+    "It takes more force to speed up a more massive object the same amount as a lower mass object.",
+    "Potential energy can be stored in some systems when you change the shape or arrangement of parts in that system (e.g., a spring).",
+    "Contact forces transfer energy between different objects or subsystems within the larger cart-launcher system."
+  ],
+  "misconceptions": [
+    "1&2-a) Force determines speed, not acceleration (constant force,",
+    "constant speed)",
+    "1&2- b) Motion implies force (object in motion has a forward force)",
+    "3-a) Elastic PE does not depend on amount of deformation (e.g., \"same",
+    "elastic energy no matter how much it's stretched/compressed\").",
+    "3-b) Reversed dependence with stretch (e.g., \"a rubber band stretched",
+    "farther has less elastic energy because it 'can't stretch much more' \").",
+    "4-a) Energy \"used up\" or \"lost,\" not transformed to",
+    "thermal/sound/internal energy during contact",
+    "4-b) If stays in system, energy will be conserved."
+  ],
+  "quiz_items": [
+    {
+      "item_id": "L8_Q1",
+      "type": "multiple_choice",
+      "question_number": 1,
+      "stem": "A cart is launched by the same spring. Trial 1 compresses the spring 2 cm. Trial 2 compresses it 5 cm. Which trial gives the cart more kinetic energy right after launch?",
+      "options": {
+        "A": "Trial 1",
+        "B": "Trial 2",
+        "C": "Same in both trials",
+        "D": "Depends only on cart mass"
+      },
+      "matched_misconception": "3-a)"
+    },
+    {
+      "item_id": "L8_Q1_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L8_Q2",
+      "type": "multiple_choice",
+      "question_number": 2,
+      "stem": "Two carts start from rest on the same low-friction track. You push each cart with the same constant force for the same amount of time. Cart A has a smaller mass than Cart B. Which statement is most accurate?",
+      "options": {
+        "A": "Both carts reach the same speed because the force is the same.",
+        "B": "The heavier cart speeds up more because it has more mass.",
+        "C": "The lighter cart speeds up more because the same force changes its motion more.",
+        "D": "The cart that ends up moving faster must have had a larger force."
+      },
+      "matched_misconception": "A for 1&2-a). D for 1&2-b)"
+    },
+    {
+      "item_id": "L8_Q2_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L8_Q3",
+      "type": "multiple_choice",
+      "question_number": 3,
+      "stem": "A cart is launched from a spring and is now rolling across a flat low-friction track. The spring is no longer touching the cart. Which statement best describes the horizontal forces acting on the cart while it is coasting?",
+      "options": {
+        "A": "There is a constant forward force from the spring that keeps the cart moving.",
+        "B": "The forward force of the launch is still \"inside\" the cart, pushing it forward.",
+        "C": "There are no horizontal forces acting on the cart, so it continues at a constant speed.",
+        "D": "The force of the launch must be greater than the force of the air for the cart to keep moving."
+      },
+      "matched_misconception": "1&2-b)"
+    },
+    {
+      "item_id": "L8_Q3_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L8_Q4",
+      "type": "multiple_choice",
+      "question_number": 4,
+      "stem": "A spring launches a cart. After the launch, the spring is at rest and the cart is moving. If you measure the energy, the cart has slightly less kinetic energy than the potential energy that was originally stored in the compressed spring. Where did the \"missing\" energy go?",
+      "options": {
+        "A": "The energy was used up by the spring to overcome its own weight.",
+        "B": "Some energy was transferred into thermal (heat) and sound energy during the contact.",
+        "C": "The energy disappeared because energy is only conserved in perfectly \"ideal\" systems.",
+        "D": "The missing energy is still in the spring because springs cannot transfer all their energy."
+      },
+      "matched_misconception": "4-a)"
+    },
+    {
+      "item_id": "L8_Q4_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    }
+  ]
+}
