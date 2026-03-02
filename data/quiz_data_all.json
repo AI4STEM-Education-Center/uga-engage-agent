@@ -1,0 +1,927 @@
+{
+  "title": "Extracted & Adapted Quiz Items for 8 Lessons",
+  "description": "Physics collision and force quiz items with confidence checks for cognitive engagement assessment",
+  "total_lessons": 8,
+  "lessons": [
+    {
+      "lesson_number": 1,
+      "lesson_title": "Lesson 1",
+      "core_ideas": [
+        "1) In a collision between two objects, the objects have to come into contact; sometimes something is damaged, but not always.",
+        "Different factors and variables may cause objects to be damaged or not damaged in a collision."
+      ],
+      "misconceptions": [
+        "a) If nothing looks damaged after the collision, the force must have",
+        "been weak.",
+        "b) Heavier objects always cause more damage. (not thinking about other",
+        "factors)"
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L1_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "A phone drops onto a soft pillow. The phone looks the same afterward. Which statement best describes the collision?",
+          "options": {
+            "A": "The force was weak because nothing was damaged.",
+            "B": "The phone and pillow pushed on each other.",
+            "C": "Soft objects cannot exert forces.",
+            "D": "Only the phone pushed; the pillow did not."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L1_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L1_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "A bug hits a car windshield while the car is moving on the highway. The windshield looks the same afterward. Which statement best describes the collision?",
+          "options": {
+            "A": "The force must have been weak because the windshield was not damaged.",
+            "B": "The bug and the windshield pushed on each other during contact.",
+            "C": "The windshield exerted a force, but the bug did not because it is small.",
+            "D": "There was no collision because the windshield did not change shape."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L1_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L1_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "A heavy bowling ball hits the same window very slowly. A light golf ball hits a window very fast. The bowling ball does break the window, but the golf ball broke the window. Which statement best explain it?",
+          "options": {
+            "A": "Heavier objects always cause more damage.",
+            "B": "Speed can matter as well as mass.",
+            "C": "The window must have been defective.",
+            "D": "Smaller objects have stronger gravity."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L1_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L1_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "A large truck and a small compact car collide head on. The car is badly crumpled, but the truck shows much less damage. Which statement best explains why the damage differs?",
+          "options": {
+            "A": "The truck must have exerted a much larger force to the car.",
+            "B": "Damage depends on factors such as materials and design of each object, not only mass.",
+            "C": "The car was damaged because it exerted no force on the truck.",
+            "D": "The truck was less damaged because smaller objects have less gravity."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L1_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 2,
+      "lesson_title": "Lesson 2",
+      "core_ideas": [
+        "1) The motion of an object is determined by the sum of the forces acting on it; if the total force on the object is not zero, its motion will change",
+        "A collision can cause the objects involved to change motion and/or change shape.",
+        "Energy transfer occurs during a collision.",
+        "There is a force(s) between objects when they make contact during a collision."
+      ],
+      "misconceptions": [
+        "1-a) A force is needed to keep something moving at constant speed",
+        "1-b) Balanced forces mean the object must be at rest.",
+        "2-a) If motion changes, there is a change in force",
+        "3-a) Energy is lost/disappears in an inelastic ('sticky') collision.",
+        "3-b) Momentum and energy are the same (or both are always conserved)"
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L2_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "A cart bumps a box at rest on ice. After the bump, the box moves forward at nearly constant speed. Which statement best explains this?",
+          "options": {
+            "A": "The box must have a forward force on it to keep moving.",
+            "B": "Forces on the box can be balanced while it keeps moving.",
+            "C": "Balanced forces mean the box must be at rest, so it cannot be moving.",
+            "D": "Gravity makes the box move forward after the bump."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L2_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L2_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "A moving lump of clay hits a block and sticks to it. After the collision, the clay and block are no longer moving. Where did the clay's kinetic energy go?",
+          "options": {
+            "A": "It vanished when the objects stopped moving.",
+            "B": "It was transferred to the clay, block, and surroundings, such as warming up and sound during the collision.",
+            "C": "It disappeared because the clay changed shape permanently.",
+            "D": "It stayed as kinetic energy in the clay and block even though they are not moving."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L2_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L2_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "A cart is pulled on a low-friction track. The spring scale reading stays the same, and the cart speeds up. What does this show?",
+          "options": {
+            "A": "The pull force must be increasing because the cart is speeding up.",
+            "B": "The pull force can stay the same while the cart's motion changes.",
+            "C": "The pull force must be decreasing because the cart is getting faster.",
+            "D": "A force is only needed to start the cart, not to speed it up."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L2_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L2_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "On a nearly frictionless track, a moving cart hits a cart at rest and they stick together. Which statement about the two-cart system is best?",
+          "options": {
+            "A": "Both the total momentum and the total kinetic energy of the system are conserved.",
+            "B": "The total momentum of the system is conserved, but the total kinetic energy of the system decreases.",
+            "C": "Total kinetic energy is conserved, but momentum is not because the carts stick.",
+            "D": "Neither momentum nor kinetic energy is conserved because the carts stick."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L2_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 3,
+      "lesson_title": "Lesson 3",
+      "core_ideas": [
+        "1) All solid objects bend or change shape in a collision and when other contact forces are applied to them."
+      ],
+      "misconceptions": [
+        "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
+        "no deformation happened.",
+        "b) Same force always means the same deformation regardless of area."
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L3_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "A steel ball hits a thick steel plate and bounces. Afterward, the plate looks exactly the same as before. During the moment of collision, did the steel plate deform at all?",
+          "options": {
+            "A": "No, steel is too hard to deform.",
+            "B": "No, if it deformed, we would definitely see a dent.",
+            "C": "Yes, the plate deformed a tiny amount during the collision, even if we cannot see it afterward.",
+            "D": "Yes, but only the ball deformed; the plate did not."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L3_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L3_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "High-speed video shows a golf club hitting a golf ball. The ball looks flattened for a split second, then returns to its original shape. What is the best conclusion?",
+          "options": {
+            "A": "The ball was damaged because it changed shape.",
+            "B": "The ball's shape change was temporary.",
+            "C": "Solid objects do not change shape when hit.",
+            "D": "The ball flattened on its own because it is soft."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L3_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L3_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "Two balls are the same material. One has twice the diameter of the other. You press each ball into soft clay with the same downward force. Which is most likely?",
+          "options": {
+            "A": "Both make the same dent because the force is the same.",
+            "B": "The smaller ball makes a deeper dent because the contact area is smaller.",
+            "C": "The larger ball makes a deeper dent because it has more surface area.",
+            "D": "Neither makes a dent because the balls are solid."
+          },
+          "matched_misconception": "b)"
+        },
+        {
+          "item_id": "L3_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L3_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "You press a nail into a block of soft wood with the same downward force two times. Trial 1: you press using the flat head of the nail. Trial 2: you press using the sharp tip of the nail. Which is most likely?",
+          "options": {
+            "A": "Both make the same dent because the force is the same.",
+            "B": "The sharp tip makes a deeper dent because the same force is applied over a smaller contact area.",
+            "C": "The flat head makes a deeper dent because it touches more wood.",
+            "D": "Neither makes a dent because the nail is solid."
+          },
+          "matched_misconception": "b)"
+        },
+        {
+          "item_id": "L3_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 4,
+      "lesson_title": "Lesson 4",
+      "core_ideas": [
+        "1) All solid objects deform elastically when force is applied to them, up to a point.",
+        "Different objects have a different elastic limit, which is the maximum amount of deformation they can withstand, beyond which they will deform permanently.",
+        "Different objects have a different breaking point, which is the maximum amount of deformation they can withstand, beyond which they will crack or split apart.",
+        "The type of material, the shape, and the thickness of an object all affect (a) how much it deforms when a force is applied to it"
+      ],
+      "misconceptions": [
+        "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
+        "no deformation happened.",
+        "b) Same force always means the same deformation regardless of area.",
+        "a) Elastic limit is an amount of force (or a visible bend), not a",
+        "material threshold",
+        "a) The thicker the object is, the more challenging it is to be broken",
+        "b) Breaking point is how much something bends.",
+        "a) If force applied is not enough, for some objects, they won't deform."
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L4_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "A plastic spoon is bent. At first it springs back. If bent farther, it stays bent. If bent even farther, it snaps. Which statement best matches the terms?",
+          "options": {
+            "A": "The elastic limit is when it snaps.",
+            "B": "The breaking point is when it first bends.",
+            "C": "The breaking point is when it stays bent.",
+            "D": "Elastic limit is where it won't spring back; breaking point is where it snaps."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L4_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L4_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "Two rulers are the same length but made of different materials. You push down on the center of each ruler with the same force and then let go. Ruler A springs back. Ruler B stays slightly bent. Which conclusion is best?",
+          "options": {
+            "A": "Ruler B did not deform because the force was not strong enough.",
+            "B": "The same force pushed Ruler B past its elastic limit, so it deformed permanently.",
+            "C": "Elastic limit is the amount of force you used, so both rulers have the same elastic limit.",
+            "D": "Both reached their elastic limit."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L4_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L4_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "You push on a thick wooden table with your finger. The table does not appear to move or change shape. Which statement is scientifically accurate?",
+          "options": {
+            "A": "No deformation occurred because the table looks exactly the same as before.",
+            "B": "The table deformed elastically, even if the change was too small for your eyes to see.",
+            "C": "Deformation only begins once the force is strong enough to leave a permanent dent.",
+            "D": "Solid objects like wood are too hard to deform unless they reach their breaking point."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L4_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L4_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "Two beams are made of the same plastic. Beam X is twice as thick as Beam Y. If you apply the same amount of force to both, which will happen?",
+          "options": {
+            "A": "Both deform the same because the same force is applied.",
+            "B": "Beam X deforms more because the same force is applied over a smaller contact area.",
+            "C": "Beam Y deforms more because the wide pad \"adds\" extra force.",
+            "D": "Neither deforms unless the force is large enough to crack the plastic."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L4_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 5,
+      "lesson_title": "Lesson 5",
+      "core_ideas": [
+        "1) Objects that make contact with each other apply equally strong forces on each other in opposite directions.",
+        "Objects that collide apply an equally strong peak force (maximum force) on each other during the collision.",
+        "Increasing the speed or mass of a moving object increases its kinetic energy (KE).",
+        "The more KE that objects in a system have, the higher the peak forces they can produce in a collision. (It is right only when the time is controlled; like the collision is an \"immediate\")"
+      ],
+      "misconceptions": [
+        "a) Heavier object exerts the larger force in a collision (Hestenes et",
+        "al., 1992)",
+        "b) Faster object exerts the larger force (Aygun & Tan, 2021)",
+        "c) The 'active' pusher produces more force than the 'passive' object.",
+        "(Hestenes et al., 1992)",
+        "d) Stationary objects cannot exert forces (Brown & Clement, 1987)",
+        "a) At the moment of impact, the more massive object exerts the larger",
+        "peak force.",
+        "a) Increasing KE of an object indicates a larger force applied to the",
+        "object. (when it's not the force)",
+        "a) During a collision, an object with more KE applies a larger peak",
+        "force than that it receives."
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L5_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "A large delivery truck collides with a small mosquito. During the brief time they are in contact, how do the forces they exert on each other compare?",
+          "options": {
+            "A": "The truck exerts a stronger force on the mosquito.",
+            "B": "The mosquito exerts a stronger force on the truck.",
+            "C": "They exert forces of equal strength on each other.",
+            "D": "Neither exerts a force because the mosquito is too small."
+          },
+          "matched_misconception": "A for 1-a), 2-a), D for 1-d)"
+        },
+        {
+          "item_id": "L5_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L5_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "A soccer player (Player A) collides with a stationary player (Player B). In a second trial, Player A runs twice as fast before hitting Player B. In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved?",
+          "options": {
+            "A": "",
+            "B": "In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved? A. The peak force is smaller in the second collision because faster motion reduces contact time. B. The peak force is larger in the second collision because Player A has more kinetic energy.",
+            "C": "The peak force is the same in both collisions because Player B is standing still.",
+            "D": "Player A exerts a larger force than Player B in in the second collision."
+          },
+          "matched_misconception": "D for 1-b), C for 1-d)"
+        },
+        {
+          "item_id": "L5_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L5_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "Two students stand on skateboards facing each other. Student A pushes on Student B's hands to start B rolling away. While their hands are in contact, how do the forces compare?",
+          "options": {
+            "A": "Student A exerts a larger force because A is the one doing the pushing.",
+            "B": "Student B exerts a larger force because B is being pushed backward.",
+            "C": "They exert forces of equal strength on each other in opposite directions.",
+            "D": "Student B exerts no force because B is passive. Misconception matched: A & D for 1-c)"
+          },
+          "matched_misconception": "A & D for 1-c)"
+        },
+        {
+          "item_id": "L5_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L5_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "A moving hockey puck hits a stationary puck of the same mass in a very brief collision. The moving puck has more kinetic energy before impact. During the collision, how do the peak forces on the two pucks compare?",
+          "options": {
+            "A": "The moving puck exerts a larger peak force because it has more kinetic energy.",
+            "B": "The stationary puck exerts a larger peak force because it is not moving.",
+            "C": "The peak forces are equal in strength on both pucks.",
+            "D": "Only the moving puck exerts a force because the other puck is stationary. Misconception matched: A for 4-a), D for 1-d)"
+          },
+          "matched_misconception": "A for 4-a), D for 1-d)"
+        },
+        {
+          "item_id": "L5_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 6,
+      "lesson_title": "Lesson 6",
+      "core_ideas": [],
+      "misconceptions": [
+        "1) Students may think that in a collision between two players, the",
+        "bigger or faster player exerts a greater force on the smaller or slower",
+        "player, rather than both players experiencing equal forces."
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L6_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "Two soccer players collide head-to-head. Player 1 is bigger and faster. Which statement is best about the forces during the collision?",
+          "options": {
+            "A": "Player 1 exerts more force on Player 2.",
+            "B": "Player 2 exerts more force on Player 1.",
+            "C": "Both exert equal forces on each other.",
+            "D": "Only the faster player exerts force."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L6_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L6_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "The same soccer ball hits the same metal goalpost in two trials. In Trial 1, the ball is moving slowly. In Trial 2, the ball is moving much faster. In which trial will the ball flatten more during the impact?",
+          "options": {
+            "A": "Trial 1, because slower collisions cause more flattening.",
+            "B": "Trial 2, because a faster-moving ball has more kinetic energy at impact.",
+            "C": "Same, because the metal goalpost the ball hit is the same in both trials.",
+            "D": "The ball's weight matters most, so it should flatten about the same in both trials."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L6_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L6_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "A fast skater (Player A) bumps into a slower skater (Player B). During the brief contact, how do the forces compare?",
+          "options": {
+            "A": "Player A exerts a larger force because A is faster.",
+            "B": "Player B exerts a larger force because B is slower.",
+            "C": "They exert equal forces on each other in opposite directions.",
+            "D": "Only Player A exerts a force because A is moving."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L6_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L6_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "A larger football player and a smaller football player collide. The smaller player's speed changes more after the collision. What is the best explanation?",
+          "options": {
+            "A": "The larger player exerted a larger force on the smaller player.",
+            "B": "The forces were equal in size, but the smaller player's motion changed more because of differences in mass.",
+            "C": "The smaller player exerted no force because they were smaller.",
+            "D": "The larger player felt no force because they kept moving forward."
+          },
+          "matched_misconception": ""
+        },
+        {
+          "item_id": "L6_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 7,
+      "lesson_title": "Lesson 7",
+      "core_ideas": [
+        "1. The more kinetic energy an object has the more damage it can do in a collision.",
+        "The more kinetic energy an object has the more you have to push against the direction of its motion to get it to stop.",
+        "The kinetic energy of an object is directly proportional to its mass; the KE of an object is proportional to the square of its speed."
+      ],
+      "misconceptions": [
+        "a) Kinetic energy depends on mass only. (Liu & Fang, 2017)",
+        "b) Double of speed double kinetic energy. (Liu & Fang, 2017)",
+        "c) Kinetic energy is momentum. (Liu & Fang, 2017; Dalaklioglu et al.,",
+        "2015)",
+        "d) An object has energy within it that is used up as the object moves.",
+        "(MOSART)"
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L7_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "Car A and Car B have the same mass. Car B is moving twice as fast as Car A. How does the kinetic energy of Car B compare to Car A?",
+          "options": {
+            "A": "The same as Car A",
+            "B": "Two times Car A",
+            "C": "Four times Car A",
+            "D": "Half of Car A"
+          },
+          "matched_misconception": "b)"
+        },
+        {
+          "item_id": "L7_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L7_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "Cart A has mass 2 kg and moves at 2 m/s. Cart B has mass 1 kg and moves at 4 m/s. Which cart has more kinetic energy?",
+          "options": {
+            "A": "Cart A, because it has more mass.",
+            "B": "Cart B, because it is moving faster.",
+            "C": "They have the same kinetic energy because one has double the mass and the other has double the speed.",
+            "D": "You can't tell without knowing how far each cart travels."
+          },
+          "matched_misconception": "A for a), C for b)"
+        },
+        {
+          "item_id": "L7_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L7_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "Two carts move toward identical foam barriers. Both carts have the same momentum, but Cart A is heavier and moving slower, while Cart B is lighter and moving faster. Which statement is most accurate?",
+          "options": {
+            "A": "They have the same kinetic energy because their momentum is the same.",
+            "B": "Cart B has more kinetic energy because higher speed increases kinetic energy more than mass does.",
+            "C": "Cart A has more kinetic energy because it has more mass.",
+            "D": "You cannot compare kinetic energy unless you know the stopping time."
+          },
+          "matched_misconception": "c)"
+        },
+        {
+          "item_id": "L7_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L7_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "A puck glides across very smooth ice at a nearly constant speed for several seconds. Which statement best describes what happens to the puck's kinetic energy while it keeps moving at the same speed?",
+          "options": {
+            "A": "It decreases because the puck uses up its kinetic energy to keep moving.",
+            "B": "It stays about the same because its speed stays about the same.",
+            "C": "It increases because moving objects build up kinetic energy over time.",
+            "D": "It becomes momentum, so kinetic energy is gone."
+          },
+          "matched_misconception": "A for d), D for c)"
+        },
+        {
+          "item_id": "L7_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    },
+    {
+      "lesson_number": 8,
+      "lesson_title": "Lesson 8",
+      "core_ideas": [
+        "1) The more force you apply to an object the more that object speeds up.",
+        "It takes more force to speed up a more massive object the same amount as a lower mass object.",
+        "Potential energy can be stored in some systems when you change the shape or arrangement of parts in that system (e.g., a spring).",
+        "Contact forces transfer energy between different objects or subsystems within the larger cart-launcher system."
+      ],
+      "misconceptions": [
+        "1&2-a) Force determines speed, not acceleration (constant force,",
+        "constant speed)",
+        "1&2- b) Motion implies force (object in motion has a forward force)",
+        "3-a) Elastic PE does not depend on amount of deformation (e.g., \"same",
+        "elastic energy no matter how much it's stretched/compressed\").",
+        "3-b) Reversed dependence with stretch (e.g., \"a rubber band stretched",
+        "farther has less elastic energy because it 'can't stretch much more' \").",
+        "4-a) Energy \"used up\" or \"lost,\" not transformed to",
+        "thermal/sound/internal energy during contact",
+        "4-b) If stays in system, energy will be conserved."
+      ],
+      "quiz_items": [
+        {
+          "item_id": "L8_Q1",
+          "type": "multiple_choice",
+          "question_number": 1,
+          "stem": "A cart is launched by the same spring. Trial 1 compresses the spring 2 cm. Trial 2 compresses it 5 cm. Which trial gives the cart more kinetic energy right after launch?",
+          "options": {
+            "A": "Trial 1",
+            "B": "Trial 2",
+            "C": "Same in both trials",
+            "D": "Depends only on cart mass"
+          },
+          "matched_misconception": "3-a)"
+        },
+        {
+          "item_id": "L8_Q1_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L8_Q2",
+          "type": "multiple_choice",
+          "question_number": 2,
+          "stem": "Two carts start from rest on the same low-friction track. You push each cart with the same constant force for the same amount of time. Cart A has a smaller mass than Cart B. Which statement is most accurate?",
+          "options": {
+            "A": "Both carts reach the same speed because the force is the same.",
+            "B": "The heavier cart speeds up more because it has more mass.",
+            "C": "The lighter cart speeds up more because the same force changes its motion more.",
+            "D": "The cart that ends up moving faster must have had a larger force."
+          },
+          "matched_misconception": "A for 1&2-a). D for 1&2-b)"
+        },
+        {
+          "item_id": "L8_Q2_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L8_Q3",
+          "type": "multiple_choice",
+          "question_number": 3,
+          "stem": "A cart is launched from a spring and is now rolling across a flat low-friction track. The spring is no longer touching the cart. Which statement best describes the horizontal forces acting on the cart while it is coasting?",
+          "options": {
+            "A": "There is a constant forward force from the spring that keeps the cart moving.",
+            "B": "The forward force of the launch is still \"inside\" the cart, pushing it forward.",
+            "C": "There are no horizontal forces acting on the cart, so it continues at a constant speed.",
+            "D": "The force of the launch must be greater than the force of the air for the cart to keep moving."
+          },
+          "matched_misconception": "1&2-b)"
+        },
+        {
+          "item_id": "L8_Q3_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        },
+        {
+          "item_id": "L8_Q4",
+          "type": "multiple_choice",
+          "question_number": 4,
+          "stem": "A spring launches a cart. After the launch, the spring is at rest and the cart is moving. If you measure the energy, the cart has slightly less kinetic energy than the potential energy that was originally stored in the compressed spring. Where did the \"missing\" energy go?",
+          "options": {
+            "A": "The energy was used up by the spring to overcome its own weight.",
+            "B": "Some energy was transferred into thermal (heat) and sound energy during the contact.",
+            "C": "The energy disappeared because energy is only conserved in perfectly \"ideal\" systems.",
+            "D": "The missing energy is still in the spring because springs cannot transfer all their energy."
+          },
+          "matched_misconception": "4-a)"
+        },
+        {
+          "item_id": "L8_Q4_confidence",
+          "type": "confidence_check",
+          "stem": "How confident are you about your answer?",
+          "options": {
+            "A": "Very confident",
+            "B": "Somewhat confident",
+            "C": "Not very confident",
+            "D": "Just guessing"
+          }
+        }
+      ]
+    }
+  ]
+}

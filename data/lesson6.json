@@ -1,0 +1,108 @@
+{
+  "lesson_number": 6,
+  "lesson_title": "Lesson 6",
+  "core_ideas": [],
+  "misconceptions": [
+    "1) Students may think that in a collision between two players, the",
+    "bigger or faster player exerts a greater force on the smaller or slower",
+    "player, rather than both players experiencing equal forces."
+  ],
+  "quiz_items": [
+    {
+      "item_id": "L6_Q1",
+      "type": "multiple_choice",
+      "question_number": 1,
+      "stem": "Two soccer players collide head-to-head. Player 1 is bigger and faster. Which statement is best about the forces during the collision?",
+      "options": {
+        "A": "Player 1 exerts more force on Player 2.",
+        "B": "Player 2 exerts more force on Player 1.",
+        "C": "Both exert equal forces on each other.",
+        "D": "Only the faster player exerts force."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L6_Q1_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L6_Q2",
+      "type": "multiple_choice",
+      "question_number": 2,
+      "stem": "The same soccer ball hits the same metal goalpost in two trials. In Trial 1, the ball is moving slowly. In Trial 2, the ball is moving much faster. In which trial will the ball flatten more during the impact?",
+      "options": {
+        "A": "Trial 1, because slower collisions cause more flattening.",
+        "B": "Trial 2, because a faster-moving ball has more kinetic energy at impact.",
+        "C": "Same, because the metal goalpost the ball hit is the same in both trials.",
+        "D": "The ball's weight matters most, so it should flatten about the same in both trials."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L6_Q2_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L6_Q3",
+      "type": "multiple_choice",
+      "question_number": 3,
+      "stem": "A fast skater (Player A) bumps into a slower skater (Player B). During the brief contact, how do the forces compare?",
+      "options": {
+        "A": "Player A exerts a larger force because A is faster.",
+        "B": "Player B exerts a larger force because B is slower.",
+        "C": "They exert equal forces on each other in opposite directions.",
+        "D": "Only Player A exerts a force because A is moving."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L6_Q3_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L6_Q4",
+      "type": "multiple_choice",
+      "question_number": 4,
+      "stem": "A larger football player and a smaller football player collide. The smaller player's speed changes more after the collision. What is the best explanation?",
+      "options": {
+        "A": "The larger player exerted a larger force on the smaller player.",
+        "B": "The forces were equal in size, but the smaller player's motion changed more because of differences in mass.",
+        "C": "The smaller player exerted no force because they were smaller.",
+        "D": "The larger player felt no force because they kept moving forward."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L6_Q4_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    }
+  ]
+}

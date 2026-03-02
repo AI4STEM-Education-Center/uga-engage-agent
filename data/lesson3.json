@@ -1,0 +1,110 @@
+{
+  "lesson_number": 3,
+  "lesson_title": "Lesson 3",
+  "core_ideas": [
+    "1) All solid objects bend or change shape in a collision and when other contact forces are applied to them."
+  ],
+  "misconceptions": [
+    "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
+    "no deformation happened.",
+    "b) Same force always means the same deformation regardless of area."
+  ],
+  "quiz_items": [
+    {
+      "item_id": "L3_Q1",
+      "type": "multiple_choice",
+      "question_number": 1,
+      "stem": "A steel ball hits a thick steel plate and bounces. Afterward, the plate looks exactly the same as before. During the moment of collision, did the steel plate deform at all?",
+      "options": {
+        "A": "No, steel is too hard to deform.",
+        "B": "No, if it deformed, we would definitely see a dent.",
+        "C": "Yes, the plate deformed a tiny amount during the collision, even if we cannot see it afterward.",
+        "D": "Yes, but only the ball deformed; the plate did not."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L3_Q1_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L3_Q2",
+      "type": "multiple_choice",
+      "question_number": 2,
+      "stem": "High-speed video shows a golf club hitting a golf ball. The ball looks flattened for a split second, then returns to its original shape. What is the best conclusion?",
+      "options": {
+        "A": "The ball was damaged because it changed shape.",
+        "B": "The ball's shape change was temporary.",
+        "C": "Solid objects do not change shape when hit.",
+        "D": "The ball flattened on its own because it is soft."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L3_Q2_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L3_Q3",
+      "type": "multiple_choice",
+      "question_number": 3,
+      "stem": "Two balls are the same material. One has twice the diameter of the other. You press each ball into soft clay with the same downward force. Which is most likely?",
+      "options": {
+        "A": "Both make the same dent because the force is the same.",
+        "B": "The smaller ball makes a deeper dent because the contact area is smaller.",
+        "C": "The larger ball makes a deeper dent because it has more surface area.",
+        "D": "Neither makes a dent because the balls are solid."
+      },
+      "matched_misconception": "b)"
+    },
+    {
+      "item_id": "L3_Q3_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L3_Q4",
+      "type": "multiple_choice",
+      "question_number": 4,
+      "stem": "You press a nail into a block of soft wood with the same downward force two times. Trial 1: you press using the flat head of the nail. Trial 2: you press using the sharp tip of the nail. Which is most likely?",
+      "options": {
+        "A": "Both make the same dent because the force is the same.",
+        "B": "The sharp tip makes a deeper dent because the same force is applied over a smaller contact area.",
+        "C": "The flat head makes a deeper dent because it touches more wood.",
+        "D": "Neither makes a dent because the nail is solid."
+      },
+      "matched_misconception": "b)"
+    },
+    {
+      "item_id": "L3_Q4_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    }
+  ]
+}

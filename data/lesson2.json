@@ -1,0 +1,115 @@
+{
+  "lesson_number": 2,
+  "lesson_title": "Lesson 2",
+  "core_ideas": [
+    "1) The motion of an object is determined by the sum of the forces acting on it; if the total force on the object is not zero, its motion will change",
+    "A collision can cause the objects involved to change motion and/or change shape.",
+    "Energy transfer occurs during a collision.",
+    "There is a force(s) between objects when they make contact during a collision."
+  ],
+  "misconceptions": [
+    "1-a) A force is needed to keep something moving at constant speed",
+    "1-b) Balanced forces mean the object must be at rest.",
+    "2-a) If motion changes, there is a change in force",
+    "3-a) Energy is lost/disappears in an inelastic ('sticky') collision.",
+    "3-b) Momentum and energy are the same (or both are always conserved)"
+  ],
+  "quiz_items": [
+    {
+      "item_id": "L2_Q1",
+      "type": "multiple_choice",
+      "question_number": 1,
+      "stem": "A cart bumps a box at rest on ice. After the bump, the box moves forward at nearly constant speed. Which statement best explains this?",
+      "options": {
+        "A": "The box must have a forward force on it to keep moving.",
+        "B": "Forces on the box can be balanced while it keeps moving.",
+        "C": "Balanced forces mean the box must be at rest, so it cannot be moving.",
+        "D": "Gravity makes the box move forward after the bump."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L2_Q1_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L2_Q2",
+      "type": "multiple_choice",
+      "question_number": 2,
+      "stem": "A moving lump of clay hits a block and sticks to it. After the collision, the clay and block are no longer moving. Where did the clay's kinetic energy go?",
+      "options": {
+        "A": "It vanished when the objects stopped moving.",
+        "B": "It was transferred to the clay, block, and surroundings, such as warming up and sound during the collision.",
+        "C": "It disappeared because the clay changed shape permanently.",
+        "D": "It stayed as kinetic energy in the clay and block even though they are not moving."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L2_Q2_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L2_Q3",
+      "type": "multiple_choice",
+      "question_number": 3,
+      "stem": "A cart is pulled on a low-friction track. The spring scale reading stays the same, and the cart speeds up. What does this show?",
+      "options": {
+        "A": "The pull force must be increasing because the cart is speeding up.",
+        "B": "The pull force can stay the same while the cart's motion changes.",
+        "C": "The pull force must be decreasing because the cart is getting faster.",
+        "D": "A force is only needed to start the cart, not to speed it up."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L2_Q3_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    },
+    {
+      "item_id": "L2_Q4",
+      "type": "multiple_choice",
+      "question_number": 4,
+      "stem": "On a nearly frictionless track, a moving cart hits a cart at rest and they stick together. Which statement about the two-cart system is best?",
+      "options": {
+        "A": "Both the total momentum and the total kinetic energy of the system are conserved.",
+        "B": "The total momentum of the system is conserved, but the total kinetic energy of the system decreases.",
+        "C": "Total kinetic energy is conserved, but momentum is not because the carts stick.",
+        "D": "Neither momentum nor kinetic energy is conserved because the carts stick."
+      },
+      "matched_misconception": ""
+    },
+    {
+      "item_id": "L2_Q4_confidence",
+      "type": "confidence_check",
+      "stem": "How confident are you about your answer?",
+      "options": {
+        "A": "Very confident",
+        "B": "Somewhat confident",
+        "C": "Not very confident",
+        "D": "Just guessing"
+      }
+    }
+  ]
+}
