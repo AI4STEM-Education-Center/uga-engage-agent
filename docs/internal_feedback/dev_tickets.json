@@ -25,7 +25,7 @@
       "reference": "#4 User feedback",
       "ticket_id": 3,
       "assignee": null,
-      "priority": ""
+      "priority": "P0"
     },
     {
       "feedback_number": 4,
@@ -79,7 +79,7 @@
       "reference": "#1 User feedback",
       "ticket_id": 9,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 1,
@@ -88,7 +88,7 @@
       "reference": "#1 User feedback",
       "ticket_id": 10,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 1,
@@ -106,7 +106,7 @@
       "reference": "#2 User feedback",
       "ticket_id": 12,
       "assignee": null,
-      "priority": ""
+      "priority": "P0"
     },
     {
       "feedback_number": 2,
@@ -115,7 +115,7 @@
       "reference": "#2 User feedback",
       "ticket_id": 13,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 2,
@@ -187,7 +187,7 @@
       "reference": "#11 User feedback",
       "ticket_id": 21,
       "assignee": null,
-      "priority": ""
+      "priority": "P0"
     },
     {
       "feedback_number": 11,
@@ -268,7 +268,7 @@
       "reference": "#5 User feedback",
       "ticket_id": 30,
       "assignee": null,
-      "priority": ""
+      "priority": "P0"
     },
     {
       "feedback_number": 5,
@@ -322,7 +322,7 @@
       "reference": "#13 User feedback",
       "ticket_id": 36,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 13,
@@ -331,7 +331,7 @@
       "reference": "#13 User feedback",
       "ticket_id": 37,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 13,
@@ -565,7 +565,7 @@
       "reference": "#23 User feedback",
       "ticket_id": 63,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 23,
@@ -745,7 +745,7 @@
       "reference": "#37 User feedback",
       "ticket_id": 83,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 37,
@@ -763,7 +763,7 @@
       "reference": "#37 User feedback",
       "ticket_id": 85,
       "assignee": null,
-      "priority": ""
+      "priority": "P1"
     },
     {
       "feedback_number": 32,

@@ -53,7 +53,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 12px;
       align-items: end;
     }
@@ -213,9 +213,17 @@
         </div>
 
         <div class="field">
+          <label for="priorityFilter">Priority</label>
+          <select id="priorityFilter">
+            <option value="">All</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label for="sortBy">Sort</label>
           <select id="sortBy">
             <option value="ticket_id">Ticket ID (asc)</option>
+            <option value="priority">Priority (P0 first)</option>
             <option value="feedback_number">Feedback Number (asc)</option>
             <option value="title">Title (A-Z)</option>
           </select>
@@ -240,6 +248,7 @@
         <thead>
           <tr>
             <th>Ticket ID</th>
+            <th>Priority</th>
             <th>Feedback</th>
             <th>Title</th>
             <th>Assignee</th>
@@ -263,6 +272,7 @@
     const searchInput = document.getElementById("search");
     const feedbackFilter = document.getElementById("feedbackFilter");
     const assigneeFilter = document.getElementById("assigneeFilter");
+    const priorityFilter = document.getElementById("priorityFilter");
     const sortBy = document.getElementById("sortBy");
     const stats = document.getElementById("stats");
     const loadStatus = document.getElementById("loadStatus");
@@ -274,6 +284,18 @@
     function normAssignee(value) {
       if (value === null || value === undefined || value === "") return "(unassigned)";
       return String(value);
+    }
+
+    function normPriority(value) {
+      if (value === null || value === undefined || value === "") return "(none)";
+      return String(value);
+    }
+
+    function priorityRank(value) {
+      const p = normPriority(value);
+      const m = p.match(/^P(\d+)$/i);
+      if (m) return Number(m[1]);
+      return 999;
     }
 
     function renderStats(tickets) {
@@ -290,18 +312,20 @@
 
     function renderRows(tickets) {
       if (!tickets.length) {
-        tableBody.innerHTML = `<tr><td colspan="6">No tickets match the current filters.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7">No tickets match the current filters.</td></tr>`;
         return;
       }
 
       tableBody.innerHTML = tickets.map((ticket) => {
         const assignee = normAssignee(ticket.assignee);
+        const priority = normPriority(ticket.priority);
         const description = ticket.description || "";
         const short = description.length > 200 ? `${description.slice(0, 200)}...` : description;
         const reference = ticket.reference || "";
         return `
           <tr id="ticket-${ticket.ticket_id}">
             <td><span class="tag">${ticket.ticket_id ?? "-"}</span></td>
+            <td>${priority}</td>
             <td>#${ticket.feedback_number ?? "-"}</td>
             <td><div class="title">${ticket.title ?? "(no title)"}</div></td>
             <td>${assignee}</td>
@@ -321,11 +345,13 @@
       const query = searchInput.value.trim().toLowerCase();
       const feedback = feedbackFilter.value;
       const assignee = assigneeFilter.value;
+      const priority = priorityFilter.value;
       const sort = sortBy.value;
 
       let rows = state.tickets.filter((t) => {
         if (feedback && String(t.feedback_number) !== feedback) return false;
         if (assignee && normAssignee(t.assignee) !== assignee) return false;
+        if (priority && normPriority(t.priority) !== priority) return false;
 
         if (!query) return true;
         const haystack = `${t.title || ""} ${t.description || ""}`.toLowerCase();
@@ -334,6 +360,7 @@
 
       rows.sort((a, b) => {
         if (sort === "title") return String(a.title || "").localeCompare(String(b.title || ""));
+        if (sort === "priority") return priorityRank(a.priority) - priorityRank(b.priority);
         const aVal = Number(a[sort] ?? 0);
         const bVal = Number(b[sort] ?? 0);
         return aVal - bVal;
@@ -356,6 +383,12 @@
 
       assigneeFilter.innerHTML = `<option value="">All</option>` +
         assignees.map((a) => `<option value="${a}">${a}</option>`).join("");
+
+      const priorities = [...new Set(tickets.map((t) => normPriority(t.priority)))]
+        .sort((a, b) => priorityRank(a) - priorityRank(b));
+
+      priorityFilter.innerHTML = `<option value="">All</option>` +
+        priorities.map((p) => `<option value="${p}">${p}</option>`).join("");
     }
 
     function useData(data, sourceLabel) {
@@ -390,7 +423,7 @@
       }
     }
 
-    [searchInput, feedbackFilter, assigneeFilter, sortBy].forEach((el) => {
+    [searchInput, feedbackFilter, assigneeFilter, priorityFilter, sortBy].forEach((el) => {
       el.addEventListener("input", applyFilters);
       el.addEventListener("change", applyFilters);
     });
