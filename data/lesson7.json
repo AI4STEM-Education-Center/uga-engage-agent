@@ -2,18 +2,16 @@
   "lesson_number": 7,
   "lesson_title": "Lesson 7",
   "core_ideas": [
-    "1. The more kinetic energy an object has the more damage it can do in a collision.",
+    "The more kinetic energy an object has the more damage it can do in a collision.",
     "The more kinetic energy an object has the more you have to push against the direction of its motion to get it to stop.",
     "The kinetic energy of an object is directly proportional to its mass; the KE of an object is proportional to the square of its speed."
   ],
-  "misconceptions": [
-    "a) Kinetic energy depends on mass only. (Liu & Fang, 2017)",
-    "b) Double of speed double kinetic energy. (Liu & Fang, 2017)",
-    "c) Kinetic energy is momentum. (Liu & Fang, 2017; Dalaklioglu et al.,",
-    "2015)",
-    "d) An object has energy within it that is used up as the object moves.",
-    "(MOSART)"
-  ],
+  "misconceptions": {
+    "a": "Kinetic energy depends on mass only.",
+    "b": "Double of speed doubles kinetic energy.",
+    "c": "Kinetic energy is momentum.",
+    "d": "An object has energy within it that is used up as the object moves."
+  },
   "quiz_items": [
     {
       "item_id": "L7_Q1",
@@ -26,7 +24,11 @@
         "C": "Four times Car A",
         "D": "Half of Car A"
       },
-      "matched_misconception": "b)"
+      "correct_answer": "C",
+      "matched_misconception": "b",
+      "distractor_misconception_map": {
+        "B": "b"
+      }
     },
     {
       "item_id": "L7_Q1_confidence",
@@ -50,7 +52,12 @@
         "C": "They have the same kinetic energy because one has double the mass and the other has double the speed.",
         "D": "You can't tell without knowing how far each cart travels."
       },
-      "matched_misconception": "A for a), C for b)"
+      "correct_answer": "B",
+      "matched_misconception": "a, b",
+      "distractor_misconception_map": {
+        "A": "a",
+        "C": "b"
+      }
     },
     {
       "item_id": "L7_Q2_confidence",
@@ -74,7 +81,12 @@
         "C": "Cart A has more kinetic energy because it has more mass.",
         "D": "You cannot compare kinetic energy unless you know the stopping time."
       },
-      "matched_misconception": "c)"
+      "correct_answer": "B",
+      "matched_misconception": "c",
+      "distractor_misconception_map": {
+        "A": "c",
+        "C": "a"
+      }
     },
     {
       "item_id": "L7_Q3_confidence",
@@ -98,7 +110,12 @@
         "C": "It increases because moving objects build up kinetic energy over time.",
         "D": "It becomes momentum, so kinetic energy is gone."
       },
-      "matched_misconception": "A for d), D for c)"
+      "correct_answer": "B",
+      "matched_misconception": "d, c",
+      "distractor_misconception_map": {
+        "A": "d",
+        "D": "c"
+      }
     },
     {
       "item_id": "L7_Q4_confidence",

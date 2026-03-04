@@ -2,13 +2,12 @@
   "lesson_number": 3,
   "lesson_title": "Lesson 3",
   "core_ideas": [
-    "1) All solid objects bend or change shape in a collision and when other contact forces are applied to them."
+    "All solid objects bend or change shape in a collision and when other contact forces are applied to them."
   ],
-  "misconceptions": [
-    "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
-    "no deformation happened.",
-    "b) Same force always means the same deformation regardless of area."
-  ],
+  "misconceptions": {
+    "a": "If it bends, it must be damaged (permanent). If it 'looks normal,' no deformation happened.",
+    "b": "Same force always means the same deformation regardless of area."
+  },
   "quiz_items": [
     {
       "item_id": "L3_Q1",
@@ -21,7 +20,12 @@
         "C": "Yes, the plate deformed a tiny amount during the collision, even if we cannot see it afterward.",
         "D": "Yes, but only the ball deformed; the plate did not."
       },
-      "matched_misconception": ""
+      "correct_answer": "C",
+      "matched_misconception": "a",
+      "distractor_misconception_map": {
+        "A": "a",
+        "B": "a"
+      }
     },
     {
       "item_id": "L3_Q1_confidence",
@@ -45,7 +49,12 @@
         "C": "Solid objects do not change shape when hit.",
         "D": "The ball flattened on its own because it is soft."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "a",
+      "distractor_misconception_map": {
+        "A": "a",
+        "C": "a"
+      }
     },
     {
       "item_id": "L3_Q2_confidence",
@@ -69,7 +78,11 @@
         "C": "The larger ball makes a deeper dent because it has more surface area.",
         "D": "Neither makes a dent because the balls are solid."
       },
-      "matched_misconception": "b)"
+      "correct_answer": "B",
+      "matched_misconception": "b",
+      "distractor_misconception_map": {
+        "A": "b"
+      }
     },
     {
       "item_id": "L3_Q3_confidence",
@@ -93,7 +106,11 @@
         "C": "The flat head makes a deeper dent because it touches more wood.",
         "D": "Neither makes a dent because the nail is solid."
       },
-      "matched_misconception": "b)"
+      "correct_answer": "B",
+      "matched_misconception": "b",
+      "distractor_misconception_map": {
+        "A": "b"
+      }
     },
     {
       "item_id": "L3_Q4_confidence",

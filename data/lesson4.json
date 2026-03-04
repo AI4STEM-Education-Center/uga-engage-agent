@@ -2,21 +2,19 @@
   "lesson_number": 4,
   "lesson_title": "Lesson 4",
   "core_ideas": [
-    "1) All solid objects deform elastically when force is applied to them, up to a point.",
+    "All solid objects deform elastically when force is applied to them, up to a point.",
     "Different objects have a different elastic limit, which is the maximum amount of deformation they can withstand, beyond which they will deform permanently.",
     "Different objects have a different breaking point, which is the maximum amount of deformation they can withstand, beyond which they will crack or split apart.",
-    "The type of material, the shape, and the thickness of an object all affect (a) how much it deforms when a force is applied to it"
+    "The type of material, the shape, and the thickness of an object all affect how much it deforms when a force is applied to it."
   ],
-  "misconceptions": [
-    "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
-    "no deformation happened.",
-    "b) Same force always means the same deformation regardless of area.",
-    "a) Elastic limit is an amount of force (or a visible bend), not a",
-    "material threshold",
-    "a) The thicker the object is, the more challenging it is to be broken",
-    "b) Breaking point is how much something bends.",
-    "a) If force applied is not enough, for some objects, they won't deform."
-  ],
+  "misconceptions": {
+    "1-a": "If it bends, it must be damaged (permanent). If it 'looks normal,' no deformation happened.",
+    "1-b": "Same force always means the same deformation regardless of area.",
+    "2-a": "Elastic limit is an amount of force (or a visible bend), not a material threshold.",
+    "3-a": "The thicker the object is, the more challenging it is to be broken.",
+    "3-b": "Breaking point is how much something bends.",
+    "4-a": "If force applied is not enough, for some objects, they won't deform."
+  },
   "quiz_items": [
     {
       "item_id": "L4_Q1",
@@ -29,7 +27,12 @@
         "C": "The breaking point is when it stays bent.",
         "D": "Elastic limit is where it won't spring back; breaking point is where it snaps."
       },
-      "matched_misconception": ""
+      "correct_answer": "D",
+      "matched_misconception": "2-a, 3-b",
+      "distractor_misconception_map": {
+        "A": "2-a",
+        "C": "3-b"
+      }
     },
     {
       "item_id": "L4_Q1_confidence",
@@ -53,7 +56,12 @@
         "C": "Elastic limit is the amount of force you used, so both rulers have the same elastic limit.",
         "D": "Both reached their elastic limit."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "4-a, 2-a",
+      "distractor_misconception_map": {
+        "A": "4-a",
+        "C": "2-a"
+      }
     },
     {
       "item_id": "L4_Q2_confidence",
@@ -77,7 +85,13 @@
         "C": "Deformation only begins once the force is strong enough to leave a permanent dent.",
         "D": "Solid objects like wood are too hard to deform unless they reach their breaking point."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "1-a",
+      "distractor_misconception_map": {
+        "A": "1-a",
+        "C": "4-a",
+        "D": "4-a"
+      }
     },
     {
       "item_id": "L4_Q3_confidence",
@@ -98,10 +112,15 @@
       "options": {
         "A": "Both deform the same because the same force is applied.",
         "B": "Beam X deforms more because the same force is applied over a smaller contact area.",
-        "C": "Beam Y deforms more because the wide pad \"adds\" extra force.",
+        "C": "Beam Y deforms more because it is thinner.",
         "D": "Neither deforms unless the force is large enough to crack the plastic."
       },
-      "matched_misconception": ""
+      "correct_answer": "C",
+      "matched_misconception": "1-b, 4-a",
+      "distractor_misconception_map": {
+        "A": "1-b",
+        "D": "4-a"
+      }
     },
     {
       "item_id": "L4_Q4_confidence",
