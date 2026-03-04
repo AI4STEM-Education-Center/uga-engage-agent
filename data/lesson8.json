@@ -2,23 +2,19 @@
   "lesson_number": 8,
   "lesson_title": "Lesson 8",
   "core_ideas": [
-    "1) The more force you apply to an object the more that object speeds up.",
+    "The more force you apply to an object the more that object speeds up.",
     "It takes more force to speed up a more massive object the same amount as a lower mass object.",
     "Potential energy can be stored in some systems when you change the shape or arrangement of parts in that system (e.g., a spring).",
     "Contact forces transfer energy between different objects or subsystems within the larger cart-launcher system."
   ],
-  "misconceptions": [
-    "1&2-a) Force determines speed, not acceleration (constant force,",
-    "constant speed)",
-    "1&2- b) Motion implies force (object in motion has a forward force)",
-    "3-a) Elastic PE does not depend on amount of deformation (e.g., \"same",
-    "elastic energy no matter how much it's stretched/compressed\").",
-    "3-b) Reversed dependence with stretch (e.g., \"a rubber band stretched",
-    "farther has less elastic energy because it 'can't stretch much more' \").",
-    "4-a) Energy \"used up\" or \"lost,\" not transformed to",
-    "thermal/sound/internal energy during contact",
-    "4-b) If stays in system, energy will be conserved."
-  ],
+  "misconceptions": {
+    "1&2-a": "Force determines speed, not acceleration (constant force, constant speed).",
+    "1&2-b": "Motion implies force (object in motion has a forward force).",
+    "3-a": "Elastic PE does not depend on amount of deformation.",
+    "3-b": "Reversed dependence with stretch (e.g., a rubber band stretched farther has less elastic energy).",
+    "4-a": "Energy 'used up' or 'lost,' not transformed to thermal/sound/internal energy during contact.",
+    "4-b": "If stays in system, energy will be conserved."
+  },
   "quiz_items": [
     {
       "item_id": "L8_Q1",
@@ -31,7 +27,11 @@
         "C": "Same in both trials",
         "D": "Depends only on cart mass"
       },
-      "matched_misconception": "3-a)"
+      "correct_answer": "B",
+      "matched_misconception": "3-a",
+      "distractor_misconception_map": {
+        "C": "3-a"
+      }
     },
     {
       "item_id": "L8_Q1_confidence",
@@ -55,7 +55,12 @@
         "C": "The lighter cart speeds up more because the same force changes its motion more.",
         "D": "The cart that ends up moving faster must have had a larger force."
       },
-      "matched_misconception": "A for 1&2-a). D for 1&2-b)"
+      "correct_answer": "C",
+      "matched_misconception": "1&2-a, 1&2-b",
+      "distractor_misconception_map": {
+        "A": "1&2-a",
+        "D": "1&2-b"
+      }
     },
     {
       "item_id": "L8_Q2_confidence",
@@ -79,7 +84,13 @@
         "C": "There are no horizontal forces acting on the cart, so it continues at a constant speed.",
         "D": "The force of the launch must be greater than the force of the air for the cart to keep moving."
       },
-      "matched_misconception": "1&2-b)"
+      "correct_answer": "C",
+      "matched_misconception": "1&2-b",
+      "distractor_misconception_map": {
+        "A": "1&2-b",
+        "B": "1&2-b",
+        "D": "1&2-b"
+      }
     },
     {
       "item_id": "L8_Q3_confidence",
@@ -103,7 +114,12 @@
         "C": "The energy disappeared because energy is only conserved in perfectly \"ideal\" systems.",
         "D": "The missing energy is still in the spring because springs cannot transfer all their energy."
       },
-      "matched_misconception": "4-a)"
+      "correct_answer": "B",
+      "matched_misconception": "4-a",
+      "distractor_misconception_map": {
+        "A": "4-a",
+        "C": "4-a"
+      }
     },
     {
       "item_id": "L8_Q4_confidence",

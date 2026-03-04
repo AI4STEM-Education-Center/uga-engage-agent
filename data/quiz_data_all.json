@@ -7,15 +7,13 @@
       "lesson_number": 1,
       "lesson_title": "Lesson 1",
       "core_ideas": [
-        "1) In a collision between two objects, the objects have to come into contact; sometimes something is damaged, but not always.",
+        "In a collision between two objects, the objects have to come into contact; sometimes something is damaged, but not always.",
         "Different factors and variables may cause objects to be damaged or not damaged in a collision."
       ],
-      "misconceptions": [
-        "a) If nothing looks damaged after the collision, the force must have",
-        "been weak.",
-        "b) Heavier objects always cause more damage. (not thinking about other",
-        "factors)"
-      ],
+      "misconceptions": {
+        "a": "If nothing looks damaged after the collision, the force must have been weak.",
+        "b": "Heavier objects always cause more damage. (not thinking about other factors)"
+      },
       "quiz_items": [
         {
           "item_id": "L1_Q1",
@@ -28,7 +26,11 @@
             "C": "Soft objects cannot exert forces.",
             "D": "Only the phone pushed; the pillow did not."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "a",
+          "distractor_misconception_map": {
+            "A": "a"
+          }
         },
         {
           "item_id": "L1_Q1_confidence",
@@ -42,9 +44,9 @@
           }
         },
         {
-          "item_id": "L1_Q3",
+          "item_id": "L1_Q2",
           "type": "multiple_choice",
-          "question_number": 3,
+          "question_number": 2,
           "stem": "A bug hits a car windshield while the car is moving on the highway. The windshield looks the same afterward. Which statement best describes the collision?",
           "options": {
             "A": "The force must have been weak because the windshield was not damaged.",
@@ -52,10 +54,14 @@
             "C": "The windshield exerted a force, but the bug did not because it is small.",
             "D": "There was no collision because the windshield did not change shape."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "a",
+          "distractor_misconception_map": {
+            "A": "a"
+          }
         },
         {
-          "item_id": "L1_Q3_confidence",
+          "item_id": "L1_Q2_confidence",
           "type": "confidence_check",
           "stem": "How confident are you about your answer?",
           "options": {
@@ -66,20 +72,24 @@
           }
         },
         {
-          "item_id": "L1_Q2",
+          "item_id": "L1_Q3",
           "type": "multiple_choice",
-          "question_number": 2,
-          "stem": "A heavy bowling ball hits the same window very slowly. A light golf ball hits a window very fast. The bowling ball does break the window, but the golf ball broke the window. Which statement best explain it?",
+          "question_number": 3,
+          "stem": "A heavy bowling ball hits a window very slowly. A light golf ball hits the same window very fast. The bowling ball does not break the window, but the golf ball broke the window. Which statement best explains it?",
           "options": {
             "A": "Heavier objects always cause more damage.",
             "B": "Speed can matter as well as mass.",
             "C": "The window must have been defective.",
             "D": "Smaller objects have stronger gravity."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "b",
+          "distractor_misconception_map": {
+            "A": "b"
+          }
         },
         {
-          "item_id": "L1_Q2_confidence",
+          "item_id": "L1_Q3_confidence",
           "type": "confidence_check",
           "stem": "How confident are you about your answer?",
           "options": {
@@ -100,7 +110,11 @@
             "C": "The car was damaged because it exerted no force on the truck.",
             "D": "The truck was less damaged because smaller objects have less gravity."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "b",
+          "distractor_misconception_map": {
+            "A": "b"
+          }
         },
         {
           "item_id": "L1_Q4_confidence",
@@ -119,18 +133,18 @@
       "lesson_number": 2,
       "lesson_title": "Lesson 2",
       "core_ideas": [
-        "1) The motion of an object is determined by the sum of the forces acting on it; if the total force on the object is not zero, its motion will change",
+        "The motion of an object is determined by the sum of the forces acting on it; if the total force on the object is not zero, its motion will change.",
         "A collision can cause the objects involved to change motion and/or change shape.",
         "Energy transfer occurs during a collision.",
         "There is a force(s) between objects when they make contact during a collision."
       ],
-      "misconceptions": [
-        "1-a) A force is needed to keep something moving at constant speed",
-        "1-b) Balanced forces mean the object must be at rest.",
-        "2-a) If motion changes, there is a change in force",
-        "3-a) Energy is lost/disappears in an inelastic ('sticky') collision.",
-        "3-b) Momentum and energy are the same (or both are always conserved)"
-      ],
+      "misconceptions": {
+        "1-a": "A force is needed to keep something moving at constant speed.",
+        "1-b": "Balanced forces mean the object must be at rest.",
+        "2-a": "If motion changes, there is a change in force.",
+        "3-a": "Energy is lost/disappears in an inelastic ('sticky') collision.",
+        "3-b": "Momentum and energy are the same (or both are always conserved)."
+      },
       "quiz_items": [
         {
           "item_id": "L2_Q1",
@@ -143,7 +157,12 @@
             "C": "Balanced forces mean the box must be at rest, so it cannot be moving.",
             "D": "Gravity makes the box move forward after the bump."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "1-a, 1-b",
+          "distractor_misconception_map": {
+            "A": "1-a",
+            "C": "1-b"
+          }
         },
         {
           "item_id": "L2_Q1_confidence",
@@ -167,7 +186,12 @@
             "C": "It disappeared because the clay changed shape permanently.",
             "D": "It stayed as kinetic energy in the clay and block even though they are not moving."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "3-a",
+          "distractor_misconception_map": {
+            "A": "3-a",
+            "C": "3-a"
+          }
         },
         {
           "item_id": "L2_Q2_confidence",
@@ -191,7 +215,11 @@
             "C": "The pull force must be decreasing because the cart is getting faster.",
             "D": "A force is only needed to start the cart, not to speed it up."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "2-a",
+          "distractor_misconception_map": {
+            "A": "2-a"
+          }
         },
         {
           "item_id": "L2_Q3_confidence",
@@ -215,7 +243,12 @@
             "C": "Total kinetic energy is conserved, but momentum is not because the carts stick.",
             "D": "Neither momentum nor kinetic energy is conserved because the carts stick."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "3-b",
+          "distractor_misconception_map": {
+            "A": "3-b",
+            "C": "3-b"
+          }
         },
         {
           "item_id": "L2_Q4_confidence",
@@ -234,13 +267,12 @@
       "lesson_number": 3,
       "lesson_title": "Lesson 3",
       "core_ideas": [
-        "1) All solid objects bend or change shape in a collision and when other contact forces are applied to them."
+        "All solid objects bend or change shape in a collision and when other contact forces are applied to them."
       ],
-      "misconceptions": [
-        "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
-        "no deformation happened.",
-        "b) Same force always means the same deformation regardless of area."
-      ],
+      "misconceptions": {
+        "a": "If it bends, it must be damaged (permanent). If it 'looks normal,' no deformation happened.",
+        "b": "Same force always means the same deformation regardless of area."
+      },
       "quiz_items": [
         {
           "item_id": "L3_Q1",
@@ -253,7 +285,12 @@
             "C": "Yes, the plate deformed a tiny amount during the collision, even if we cannot see it afterward.",
             "D": "Yes, but only the ball deformed; the plate did not."
           },
-          "matched_misconception": ""
+          "correct_answer": "C",
+          "matched_misconception": "a",
+          "distractor_misconception_map": {
+            "A": "a",
+            "B": "a"
+          }
         },
         {
           "item_id": "L3_Q1_confidence",
@@ -277,7 +314,12 @@
             "C": "Solid objects do not change shape when hit.",
             "D": "The ball flattened on its own because it is soft."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "a",
+          "distractor_misconception_map": {
+            "A": "a",
+            "C": "a"
+          }
         },
         {
           "item_id": "L3_Q2_confidence",
@@ -301,7 +343,11 @@
             "C": "The larger ball makes a deeper dent because it has more surface area.",
             "D": "Neither makes a dent because the balls are solid."
           },
-          "matched_misconception": "b)"
+          "correct_answer": "B",
+          "matched_misconception": "b",
+          "distractor_misconception_map": {
+            "A": "b"
+          }
         },
         {
           "item_id": "L3_Q3_confidence",
@@ -325,7 +371,11 @@
             "C": "The flat head makes a deeper dent because it touches more wood.",
             "D": "Neither makes a dent because the nail is solid."
           },
-          "matched_misconception": "b)"
+          "correct_answer": "B",
+          "matched_misconception": "b",
+          "distractor_misconception_map": {
+            "A": "b"
+          }
         },
         {
           "item_id": "L3_Q4_confidence",
@@ -344,21 +394,19 @@
       "lesson_number": 4,
       "lesson_title": "Lesson 4",
       "core_ideas": [
-        "1) All solid objects deform elastically when force is applied to them, up to a point.",
+        "All solid objects deform elastically when force is applied to them, up to a point.",
         "Different objects have a different elastic limit, which is the maximum amount of deformation they can withstand, beyond which they will deform permanently.",
         "Different objects have a different breaking point, which is the maximum amount of deformation they can withstand, beyond which they will crack or split apart.",
-        "The type of material, the shape, and the thickness of an object all affect (a) how much it deforms when a force is applied to it"
+        "The type of material, the shape, and the thickness of an object all affect how much it deforms when a force is applied to it."
       ],
-      "misconceptions": [
-        "a) If it bends, it must be damaged (permanent). If it 'looks normal,'",
-        "no deformation happened.",
-        "b) Same force always means the same deformation regardless of area.",
-        "a) Elastic limit is an amount of force (or a visible bend), not a",
-        "material threshold",
-        "a) The thicker the object is, the more challenging it is to be broken",
-        "b) Breaking point is how much something bends.",
-        "a) If force applied is not enough, for some objects, they won't deform."
-      ],
+      "misconceptions": {
+        "1-a": "If it bends, it must be damaged (permanent). If it 'looks normal,' no deformation happened.",
+        "1-b": "Same force always means the same deformation regardless of area.",
+        "2-a": "Elastic limit is an amount of force (or a visible bend), not a material threshold.",
+        "3-a": "The thicker the object is, the more challenging it is to be broken.",
+        "3-b": "Breaking point is how much something bends.",
+        "4-a": "If force applied is not enough, for some objects, they won't deform."
+      },
       "quiz_items": [
         {
           "item_id": "L4_Q1",
@@ -371,7 +419,12 @@
             "C": "The breaking point is when it stays bent.",
             "D": "Elastic limit is where it won't spring back; breaking point is where it snaps."
           },
-          "matched_misconception": ""
+          "correct_answer": "D",
+          "matched_misconception": "2-a, 3-b",
+          "distractor_misconception_map": {
+            "A": "2-a",
+            "C": "3-b"
+          }
         },
         {
           "item_id": "L4_Q1_confidence",
@@ -395,7 +448,12 @@
             "C": "Elastic limit is the amount of force you used, so both rulers have the same elastic limit.",
             "D": "Both reached their elastic limit."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "4-a, 2-a",
+          "distractor_misconception_map": {
+            "A": "4-a",
+            "C": "2-a"
+          }
         },
         {
           "item_id": "L4_Q2_confidence",
@@ -419,7 +477,13 @@
             "C": "Deformation only begins once the force is strong enough to leave a permanent dent.",
             "D": "Solid objects like wood are too hard to deform unless they reach their breaking point."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "1-a",
+          "distractor_misconception_map": {
+            "A": "1-a",
+            "C": "4-a",
+            "D": "4-a"
+          }
         },
         {
           "item_id": "L4_Q3_confidence",
@@ -440,10 +504,15 @@
           "options": {
             "A": "Both deform the same because the same force is applied.",
             "B": "Beam X deforms more because the same force is applied over a smaller contact area.",
-            "C": "Beam Y deforms more because the wide pad \"adds\" extra force.",
+            "C": "Beam Y deforms more because it is thinner.",
             "D": "Neither deforms unless the force is large enough to crack the plastic."
           },
-          "matched_misconception": ""
+          "correct_answer": "C",
+          "matched_misconception": "1-b, 4-a",
+          "distractor_misconception_map": {
+            "A": "1-b",
+            "D": "4-a"
+          }
         },
         {
           "item_id": "L4_Q4_confidence",
@@ -462,25 +531,20 @@
       "lesson_number": 5,
       "lesson_title": "Lesson 5",
       "core_ideas": [
-        "1) Objects that make contact with each other apply equally strong forces on each other in opposite directions.",
+        "Objects that make contact with each other apply equally strong forces on each other in opposite directions.",
         "Objects that collide apply an equally strong peak force (maximum force) on each other during the collision.",
         "Increasing the speed or mass of a moving object increases its kinetic energy (KE).",
-        "The more KE that objects in a system have, the higher the peak forces they can produce in a collision. (It is right only when the time is controlled; like the collision is an \"immediate\")"
+        "The more KE that objects in a system have, the higher the peak forces they can produce in a collision. (It is right only when the time is controlled; like the collision is an 'immediate')"
       ],
-      "misconceptions": [
-        "a) Heavier object exerts the larger force in a collision (Hestenes et",
-        "al., 1992)",
-        "b) Faster object exerts the larger force (Aygun & Tan, 2021)",
-        "c) The 'active' pusher produces more force than the 'passive' object.",
-        "(Hestenes et al., 1992)",
-        "d) Stationary objects cannot exert forces (Brown & Clement, 1987)",
-        "a) At the moment of impact, the more massive object exerts the larger",
-        "peak force.",
-        "a) Increasing KE of an object indicates a larger force applied to the",
-        "object. (when it's not the force)",
-        "a) During a collision, an object with more KE applies a larger peak",
-        "force than that it receives."
-      ],
+      "misconceptions": {
+        "1-a": "Heavier object exerts the larger force in a collision.",
+        "1-b": "Faster object exerts the larger force.",
+        "1-c": "The 'active' pusher produces more force than the 'passive' object.",
+        "1-d": "Stationary objects cannot exert forces.",
+        "2-a": "At the moment of impact, the more massive object exerts the larger peak force.",
+        "3-a": "Increasing KE of an object indicates a larger force applied to the object.",
+        "4-a": "During a collision, an object with more KE applies a larger peak force than that it receives."
+      },
       "quiz_items": [
         {
           "item_id": "L5_Q1",
@@ -493,7 +557,12 @@
             "C": "They exert forces of equal strength on each other.",
             "D": "Neither exerts a force because the mosquito is too small."
           },
-          "matched_misconception": "A for 1-a), 2-a), D for 1-d)"
+          "correct_answer": "C",
+          "matched_misconception": "1-a, 2-a, 1-d",
+          "distractor_misconception_map": {
+            "A": "1-a, 2-a",
+            "D": "1-d"
+          }
         },
         {
           "item_id": "L5_Q1_confidence",
@@ -512,12 +581,17 @@
           "question_number": 2,
           "stem": "A soccer player (Player A) collides with a stationary player (Player B). In a second trial, Player A runs twice as fast before hitting Player B. In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved?",
           "options": {
-            "A": "",
-            "B": "In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved? A. The peak force is smaller in the second collision because faster motion reduces contact time. B. The peak force is larger in the second collision because Player A has more kinetic energy.",
+            "A": "The peak force is smaller in the second collision because faster motion reduces contact time.",
+            "B": "The peak force is larger in the second collision because Player A has more kinetic energy.",
             "C": "The peak force is the same in both collisions because Player B is standing still.",
-            "D": "Player A exerts a larger force than Player B in in the second collision."
+            "D": "Player A exerts a larger force than Player B in the second collision."
           },
-          "matched_misconception": "D for 1-b), C for 1-d)"
+          "correct_answer": "B",
+          "matched_misconception": "1-b, 1-d",
+          "distractor_misconception_map": {
+            "C": "1-d",
+            "D": "1-b"
+          }
         },
         {
           "item_id": "L5_Q2_confidence",
@@ -539,9 +613,14 @@
             "A": "Student A exerts a larger force because A is the one doing the pushing.",
             "B": "Student B exerts a larger force because B is being pushed backward.",
             "C": "They exert forces of equal strength on each other in opposite directions.",
-            "D": "Student B exerts no force because B is passive. Misconception matched: A & D for 1-c)"
+            "D": "Student B exerts no force because B is passive."
           },
-          "matched_misconception": "A & D for 1-c)"
+          "correct_answer": "C",
+          "matched_misconception": "1-c",
+          "distractor_misconception_map": {
+            "A": "1-c",
+            "D": "1-c"
+          }
         },
         {
           "item_id": "L5_Q3_confidence",
@@ -563,9 +642,14 @@
             "A": "The moving puck exerts a larger peak force because it has more kinetic energy.",
             "B": "The stationary puck exerts a larger peak force because it is not moving.",
             "C": "The peak forces are equal in strength on both pucks.",
-            "D": "Only the moving puck exerts a force because the other puck is stationary. Misconception matched: A for 4-a), D for 1-d)"
+            "D": "Only the moving puck exerts a force because the other puck is stationary."
           },
-          "matched_misconception": "A for 4-a), D for 1-d)"
+          "correct_answer": "C",
+          "matched_misconception": "4-a, 1-d",
+          "distractor_misconception_map": {
+            "A": "4-a",
+            "D": "1-d"
+          }
         },
         {
           "item_id": "L5_Q4_confidence",
@@ -583,12 +667,12 @@
     {
       "lesson_number": 6,
       "lesson_title": "Lesson 6",
-      "core_ideas": [],
-      "misconceptions": [
-        "1) Students may think that in a collision between two players, the",
-        "bigger or faster player exerts a greater force on the smaller or slower",
-        "player, rather than both players experiencing equal forces."
+      "core_ideas": [
+        "Application of concepts from Lessons 1-5."
       ],
+      "misconceptions": {
+        "1": "Students may think that in a collision between two players, the bigger or faster player exerts a greater force on the smaller or slower player, rather than both players experiencing equal forces."
+      },
       "quiz_items": [
         {
           "item_id": "L6_Q1",
@@ -601,7 +685,12 @@
             "C": "Both exert equal forces on each other.",
             "D": "Only the faster player exerts force."
           },
-          "matched_misconception": ""
+          "correct_answer": "C",
+          "matched_misconception": "1",
+          "distractor_misconception_map": {
+            "A": "1",
+            "D": "1"
+          }
         },
         {
           "item_id": "L6_Q1_confidence",
@@ -625,7 +714,11 @@
             "C": "Same, because the metal goalpost the ball hit is the same in both trials.",
             "D": "The ball's weight matters most, so it should flatten about the same in both trials."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "1",
+          "distractor_misconception_map": {
+            "D": "1"
+          }
         },
         {
           "item_id": "L6_Q2_confidence",
@@ -649,7 +742,12 @@
             "C": "They exert equal forces on each other in opposite directions.",
             "D": "Only Player A exerts a force because A is moving."
           },
-          "matched_misconception": ""
+          "correct_answer": "C",
+          "matched_misconception": "1",
+          "distractor_misconception_map": {
+            "A": "1",
+            "D": "1"
+          }
         },
         {
           "item_id": "L6_Q3_confidence",
@@ -673,7 +771,13 @@
             "C": "The smaller player exerted no force because they were smaller.",
             "D": "The larger player felt no force because they kept moving forward."
           },
-          "matched_misconception": ""
+          "correct_answer": "B",
+          "matched_misconception": "1",
+          "distractor_misconception_map": {
+            "A": "1",
+            "C": "1",
+            "D": "1"
+          }
         },
         {
           "item_id": "L6_Q4_confidence",
@@ -692,18 +796,16 @@
       "lesson_number": 7,
       "lesson_title": "Lesson 7",
       "core_ideas": [
-        "1. The more kinetic energy an object has the more damage it can do in a collision.",
+        "The more kinetic energy an object has the more damage it can do in a collision.",
         "The more kinetic energy an object has the more you have to push against the direction of its motion to get it to stop.",
         "The kinetic energy of an object is directly proportional to its mass; the KE of an object is proportional to the square of its speed."
       ],
-      "misconceptions": [
-        "a) Kinetic energy depends on mass only. (Liu & Fang, 2017)",
-        "b) Double of speed double kinetic energy. (Liu & Fang, 2017)",
-        "c) Kinetic energy is momentum. (Liu & Fang, 2017; Dalaklioglu et al.,",
-        "2015)",
-        "d) An object has energy within it that is used up as the object moves.",
-        "(MOSART)"
-      ],
+      "misconceptions": {
+        "a": "Kinetic energy depends on mass only.",
+        "b": "Double of speed doubles kinetic energy.",
+        "c": "Kinetic energy is momentum.",
+        "d": "An object has energy within it that is used up as the object moves."
+      },
       "quiz_items": [
         {
           "item_id": "L7_Q1",
@@ -716,7 +818,11 @@
             "C": "Four times Car A",
             "D": "Half of Car A"
           },
-          "matched_misconception": "b)"
+          "correct_answer": "C",
+          "matched_misconception": "b",
+          "distractor_misconception_map": {
+            "B": "b"
+          }
         },
         {
           "item_id": "L7_Q1_confidence",
@@ -740,7 +846,12 @@
             "C": "They have the same kinetic energy because one has double the mass and the other has double the speed.",
             "D": "You can't tell without knowing how far each cart travels."
           },
-          "matched_misconception": "A for a), C for b)"
+          "correct_answer": "B",
+          "matched_misconception": "a, b",
+          "distractor_misconception_map": {
+            "A": "a",
+            "C": "b"
+          }
         },
         {
           "item_id": "L7_Q2_confidence",
@@ -764,7 +875,12 @@
             "C": "Cart A has more kinetic energy because it has more mass.",
             "D": "You cannot compare kinetic energy unless you know the stopping time."
           },
-          "matched_misconception": "c)"
+          "correct_answer": "B",
+          "matched_misconception": "c",
+          "distractor_misconception_map": {
+            "A": "c",
+            "C": "a"
+          }
         },
         {
           "item_id": "L7_Q3_confidence",
@@ -788,7 +904,12 @@
             "C": "It increases because moving objects build up kinetic energy over time.",
             "D": "It becomes momentum, so kinetic energy is gone."
           },
-          "matched_misconception": "A for d), D for c)"
+          "correct_answer": "B",
+          "matched_misconception": "d, c",
+          "distractor_misconception_map": {
+            "A": "d",
+            "D": "c"
+          }
         },
         {
           "item_id": "L7_Q4_confidence",
@@ -807,23 +928,19 @@
       "lesson_number": 8,
       "lesson_title": "Lesson 8",
       "core_ideas": [
-        "1) The more force you apply to an object the more that object speeds up.",
+        "The more force you apply to an object the more that object speeds up.",
         "It takes more force to speed up a more massive object the same amount as a lower mass object.",
         "Potential energy can be stored in some systems when you change the shape or arrangement of parts in that system (e.g., a spring).",
         "Contact forces transfer energy between different objects or subsystems within the larger cart-launcher system."
       ],
-      "misconceptions": [
-        "1&2-a) Force determines speed, not acceleration (constant force,",
-        "constant speed)",
-        "1&2- b) Motion implies force (object in motion has a forward force)",
-        "3-a) Elastic PE does not depend on amount of deformation (e.g., \"same",
-        "elastic energy no matter how much it's stretched/compressed\").",
-        "3-b) Reversed dependence with stretch (e.g., \"a rubber band stretched",
-        "farther has less elastic energy because it 'can't stretch much more' \").",
-        "4-a) Energy \"used up\" or \"lost,\" not transformed to",
-        "thermal/sound/internal energy during contact",
-        "4-b) If stays in system, energy will be conserved."
-      ],
+      "misconceptions": {
+        "1&2-a": "Force determines speed, not acceleration (constant force, constant speed).",
+        "1&2-b": "Motion implies force (object in motion has a forward force).",
+        "3-a": "Elastic PE does not depend on amount of deformation.",
+        "3-b": "Reversed dependence with stretch (e.g., a rubber band stretched farther has less elastic energy).",
+        "4-a": "Energy 'used up' or 'lost,' not transformed to thermal/sound/internal energy during contact.",
+        "4-b": "If stays in system, energy will be conserved."
+      },
       "quiz_items": [
         {
           "item_id": "L8_Q1",
@@ -836,7 +953,11 @@
             "C": "Same in both trials",
             "D": "Depends only on cart mass"
           },
-          "matched_misconception": "3-a)"
+          "correct_answer": "B",
+          "matched_misconception": "3-a",
+          "distractor_misconception_map": {
+            "C": "3-a"
+          }
         },
         {
           "item_id": "L8_Q1_confidence",
@@ -860,7 +981,12 @@
             "C": "The lighter cart speeds up more because the same force changes its motion more.",
             "D": "The cart that ends up moving faster must have had a larger force."
           },
-          "matched_misconception": "A for 1&2-a). D for 1&2-b)"
+          "correct_answer": "C",
+          "matched_misconception": "1&2-a, 1&2-b",
+          "distractor_misconception_map": {
+            "A": "1&2-a",
+            "D": "1&2-b"
+          }
         },
         {
           "item_id": "L8_Q2_confidence",
@@ -884,7 +1010,13 @@
             "C": "There are no horizontal forces acting on the cart, so it continues at a constant speed.",
             "D": "The force of the launch must be greater than the force of the air for the cart to keep moving."
           },
-          "matched_misconception": "1&2-b)"
+          "correct_answer": "C",
+          "matched_misconception": "1&2-b",
+          "distractor_misconception_map": {
+            "A": "1&2-b",
+            "B": "1&2-b",
+            "D": "1&2-b"
+          }
         },
         {
           "item_id": "L8_Q3_confidence",
@@ -908,7 +1040,12 @@
             "C": "The energy disappeared because energy is only conserved in perfectly \"ideal\" systems.",
             "D": "The missing energy is still in the spring because springs cannot transfer all their energy."
           },
-          "matched_misconception": "4-a)"
+          "correct_answer": "B",
+          "matched_misconception": "4-a",
+          "distractor_misconception_map": {
+            "A": "4-a",
+            "C": "4-a"
+          }
         },
         {
           "item_id": "L8_Q4_confidence",

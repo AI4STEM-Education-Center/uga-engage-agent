@@ -2,18 +2,18 @@
   "lesson_number": 2,
   "lesson_title": "Lesson 2",
   "core_ideas": [
-    "1) The motion of an object is determined by the sum of the forces acting on it; if the total force on the object is not zero, its motion will change",
+    "The motion of an object is determined by the sum of the forces acting on it; if the total force on the object is not zero, its motion will change.",
     "A collision can cause the objects involved to change motion and/or change shape.",
     "Energy transfer occurs during a collision.",
     "There is a force(s) between objects when they make contact during a collision."
   ],
-  "misconceptions": [
-    "1-a) A force is needed to keep something moving at constant speed",
-    "1-b) Balanced forces mean the object must be at rest.",
-    "2-a) If motion changes, there is a change in force",
-    "3-a) Energy is lost/disappears in an inelastic ('sticky') collision.",
-    "3-b) Momentum and energy are the same (or both are always conserved)"
-  ],
+  "misconceptions": {
+    "1-a": "A force is needed to keep something moving at constant speed.",
+    "1-b": "Balanced forces mean the object must be at rest.",
+    "2-a": "If motion changes, there is a change in force.",
+    "3-a": "Energy is lost/disappears in an inelastic ('sticky') collision.",
+    "3-b": "Momentum and energy are the same (or both are always conserved)."
+  },
   "quiz_items": [
     {
       "item_id": "L2_Q1",
@@ -26,7 +26,12 @@
         "C": "Balanced forces mean the box must be at rest, so it cannot be moving.",
         "D": "Gravity makes the box move forward after the bump."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "1-a, 1-b",
+      "distractor_misconception_map": {
+        "A": "1-a",
+        "C": "1-b"
+      }
     },
     {
       "item_id": "L2_Q1_confidence",
@@ -50,7 +55,12 @@
         "C": "It disappeared because the clay changed shape permanently.",
         "D": "It stayed as kinetic energy in the clay and block even though they are not moving."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "3-a",
+      "distractor_misconception_map": {
+        "A": "3-a",
+        "C": "3-a"
+      }
     },
     {
       "item_id": "L2_Q2_confidence",
@@ -74,7 +84,11 @@
         "C": "The pull force must be decreasing because the cart is getting faster.",
         "D": "A force is only needed to start the cart, not to speed it up."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "2-a",
+      "distractor_misconception_map": {
+        "A": "2-a"
+      }
     },
     {
       "item_id": "L2_Q3_confidence",
@@ -98,7 +112,12 @@
         "C": "Total kinetic energy is conserved, but momentum is not because the carts stick.",
         "D": "Neither momentum nor kinetic energy is conserved because the carts stick."
       },
-      "matched_misconception": ""
+      "correct_answer": "B",
+      "matched_misconception": "3-b",
+      "distractor_misconception_map": {
+        "A": "3-b",
+        "C": "3-b"
+      }
     },
     {
       "item_id": "L2_Q4_confidence",

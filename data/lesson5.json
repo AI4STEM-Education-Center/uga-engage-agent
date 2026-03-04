@@ -2,25 +2,20 @@
   "lesson_number": 5,
   "lesson_title": "Lesson 5",
   "core_ideas": [
-    "1) Objects that make contact with each other apply equally strong forces on each other in opposite directions.",
+    "Objects that make contact with each other apply equally strong forces on each other in opposite directions.",
     "Objects that collide apply an equally strong peak force (maximum force) on each other during the collision.",
     "Increasing the speed or mass of a moving object increases its kinetic energy (KE).",
-    "The more KE that objects in a system have, the higher the peak forces they can produce in a collision. (It is right only when the time is controlled; like the collision is an \"immediate\")"
+    "The more KE that objects in a system have, the higher the peak forces they can produce in a collision. (It is right only when the time is controlled; like the collision is an 'immediate')"
   ],
-  "misconceptions": [
-    "a) Heavier object exerts the larger force in a collision (Hestenes et",
-    "al., 1992)",
-    "b) Faster object exerts the larger force (Aygun & Tan, 2021)",
-    "c) The 'active' pusher produces more force than the 'passive' object.",
-    "(Hestenes et al., 1992)",
-    "d) Stationary objects cannot exert forces (Brown & Clement, 1987)",
-    "a) At the moment of impact, the more massive object exerts the larger",
-    "peak force.",
-    "a) Increasing KE of an object indicates a larger force applied to the",
-    "object. (when it's not the force)",
-    "a) During a collision, an object with more KE applies a larger peak",
-    "force than that it receives."
-  ],
+  "misconceptions": {
+    "1-a": "Heavier object exerts the larger force in a collision.",
+    "1-b": "Faster object exerts the larger force.",
+    "1-c": "The 'active' pusher produces more force than the 'passive' object.",
+    "1-d": "Stationary objects cannot exert forces.",
+    "2-a": "At the moment of impact, the more massive object exerts the larger peak force.",
+    "3-a": "Increasing KE of an object indicates a larger force applied to the object.",
+    "4-a": "During a collision, an object with more KE applies a larger peak force than that it receives."
+  },
   "quiz_items": [
     {
       "item_id": "L5_Q1",
@@ -33,7 +28,12 @@
         "C": "They exert forces of equal strength on each other.",
         "D": "Neither exerts a force because the mosquito is too small."
       },
-      "matched_misconception": "A for 1-a), 2-a), D for 1-d)"
+      "correct_answer": "C",
+      "matched_misconception": "1-a, 2-a, 1-d",
+      "distractor_misconception_map": {
+        "A": "1-a, 2-a",
+        "D": "1-d"
+      }
     },
     {
       "item_id": "L5_Q1_confidence",
@@ -52,12 +52,17 @@
       "question_number": 2,
       "stem": "A soccer player (Player A) collides with a stationary player (Player B). In a second trial, Player A runs twice as fast before hitting Player B. In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved?",
       "options": {
-        "A": "",
-        "B": "In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved? A. The peak force is smaller in the second collision because faster motion reduces contact time. B. The peak force is larger in the second collision because Player A has more kinetic energy.",
+        "A": "The peak force is smaller in the second collision because faster motion reduces contact time.",
+        "B": "The peak force is larger in the second collision because Player A has more kinetic energy.",
         "C": "The peak force is the same in both collisions because Player B is standing still.",
-        "D": "Player A exerts a larger force than Player B in in the second collision."
+        "D": "Player A exerts a larger force than Player B in the second collision."
       },
-      "matched_misconception": "D for 1-b), C for 1-d)"
+      "correct_answer": "B",
+      "matched_misconception": "1-b, 1-d",
+      "distractor_misconception_map": {
+        "C": "1-d",
+        "D": "1-b"
+      }
     },
     {
       "item_id": "L5_Q2_confidence",
@@ -79,9 +84,14 @@
         "A": "Student A exerts a larger force because A is the one doing the pushing.",
         "B": "Student B exerts a larger force because B is being pushed backward.",
         "C": "They exert forces of equal strength on each other in opposite directions.",
-        "D": "Student B exerts no force because B is passive. Misconception matched: A & D for 1-c)"
+        "D": "Student B exerts no force because B is passive."
       },
-      "matched_misconception": "A & D for 1-c)"
+      "correct_answer": "C",
+      "matched_misconception": "1-c",
+      "distractor_misconception_map": {
+        "A": "1-c",
+        "D": "1-c"
+      }
     },
     {
       "item_id": "L5_Q3_confidence",
@@ -103,9 +113,14 @@
         "A": "The moving puck exerts a larger peak force because it has more kinetic energy.",
         "B": "The stationary puck exerts a larger peak force because it is not moving.",
         "C": "The peak forces are equal in strength on both pucks.",
-        "D": "Only the moving puck exerts a force because the other puck is stationary. Misconception matched: A for 4-a), D for 1-d)"
+        "D": "Only the moving puck exerts a force because the other puck is stationary."
       },
-      "matched_misconception": "A for 4-a), D for 1-d)"
+      "correct_answer": "C",
+      "matched_misconception": "4-a, 1-d",
+      "distractor_misconception_map": {
+        "A": "4-a",
+        "D": "1-d"
+      }
     },
     {
       "item_id": "L5_Q4_confidence",
