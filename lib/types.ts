@@ -1,0 +1,89 @@
+export type Answers = Record<string, string>;
+
+export type Plan = {
+  name: string;
+  strategy: string;
+  relevance: Record<string, number>;
+  overallRecommendation: string;
+  recommendationReason: string;
+  summary: string;
+  tldr: string;
+  rationale: string;
+  tactics: string[];
+  cadence: string;
+  checks: string[];
+};
+
+export type ContentItem = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  strategy: string;
+};
+
+export type ImageState = {
+  status: "idle" | "loading" | "ready" | "error";
+  url?: string;
+  error?: string;
+};
+
+export type VideoState = {
+  status: "idle" | "loading" | "polling" | "ready" | "error";
+  url?: string;
+  error?: string;
+  operationName?: string;
+};
+
+export type StudentStrategyResult = {
+  id: string;
+  name: string;
+  plan: Plan;
+};
+
+export type QuizItem = {
+  item_id: string;
+  type: "multiple_choice" | "confidence_check";
+  question_number?: number;
+  stem: string;
+  options: Record<string, string>;
+  matched_misconception?: string;
+};
+
+export type Lesson = {
+  lesson_number: number;
+  lesson_title: string;
+  core_ideas: string[];
+  misconceptions: string[];
+  quiz_items: QuizItem[];
+};
+
+export type QuizStatus = "draft" | "published" | "closed";
+
+export type StudentAnswer = {
+  student_id: string;
+  student_name: string;
+  class_id: string;
+  assignment_id: string;
+  lesson_number: number;
+  answers: Record<string, string>; // item_id → selected option (e.g., "A")
+  submitted_at: string;
+};
+
+export type ContentPublishRecord = {
+  class_id: string;
+  assignment_id: string;
+  content_item_id: string;
+  published: boolean;
+  published_at: string;
+  published_by: string;
+};
+
+export type ContentRatingRecord = {
+  class_id: string;
+  assignment_id: string;
+  student_id: string;
+  content_item_id: string;
+  rating: number; // 1-5
+  rated_at: string;
+};

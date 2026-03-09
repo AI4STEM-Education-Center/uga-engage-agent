@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       studentId,
       assignment,
       classId,
-      sessionId,
+      assignmentId,
       cohortDistribution,
       cohortStudents,
     } = (await request.json()) as {
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       studentId?: string;
       assignment?: string;
       classId?: string;
-      sessionId?: string;
+      assignmentId?: string;
       cohortDistribution?: Record<string, number>;
       cohortStudents?: Array<{
         id: string;
@@ -130,19 +130,19 @@ export async function POST(request: Request) {
     };
 
     const classKey = classId?.trim();
-    const sessionKey = sessionId?.trim();
+    const assignmentKey = assignmentId?.trim();
     const studentKey = studentId?.trim();
 
     /* ---- cache check ---- */
-    if (classKey && sessionKey && studentKey) {
+    if (classKey && assignmentKey && studentKey) {
       const cachedPlanJson = await getCachedPlanJson(
         classKey,
-        sessionKey,
+        assignmentKey,
         studentKey,
       );
       if (cachedPlanJson) {
         console.info(
-          `engagement-plan cache HIT for ${classKey}/${sessionKey}/${studentKey}`,
+          `engagement-plan cache HIT for ${classKey}/${assignmentKey}/${studentKey}`,
         );
         const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
         cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
@@ -175,15 +175,15 @@ export async function POST(request: Request) {
     const plan = ensurePlanFields(parsedPlan);
 
     /* ---- persist to cache ---- */
-    if (classKey && sessionKey && studentKey) {
+    if (classKey && assignmentKey && studentKey) {
       await upsertCachedPlanJson(
         classKey,
-        sessionKey,
+        assignmentKey,
         studentKey,
         JSON.stringify(plan),
       );
       console.info(
-        `engagement-plan cached for ${classKey}/${sessionKey}/${studentKey}`,
+        `engagement-plan cached for ${classKey}/${assignmentKey}/${studentKey}`,
       );
     }
 

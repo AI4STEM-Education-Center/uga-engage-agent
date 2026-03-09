@@ -1,10 +1,9 @@
 "use client";
 
-import { useAuth } from "./components/AuthContext";
-import TeacherView from "./components/TeacherView";
-import StudentView from "./components/StudentView";
+import { useAuth } from "../components/AuthContext";
+import TeacherDashboardView from "../components/TeacherDashboardView";
 
-export default function Home() {
+export default function DashboardPage() {
   const { user, loading, error } = useAuth();
 
   if (loading) {
@@ -35,8 +34,17 @@ export default function Home() {
   }
 
   if (user.role === "student" || user.role === "guest") {
-    return <StudentView user={user} />;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <div className="max-w-md rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-lg font-semibold text-slate-900">Teacher Dashboard Only</p>
+          <p className="mt-2 text-sm text-slate-500">
+            This dashboard is only available in the teacher workflow.
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  return <TeacherView user={user} />;
+  return <TeacherDashboardView user={user} />;
 }

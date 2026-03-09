@@ -10,7 +10,7 @@ type GalleryItem = {
   mime_type: string;
   url: string;
   class_id: string;
-  session_id: string;
+  assignment_id: string;
   student_id: string;
   created_at: string;
   s3_key?: string;
@@ -160,6 +160,12 @@ export default function CommunityGallery() {
             Community Gallery
           </h1>
           <div className="ml-auto flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              Teacher Dashboard
+            </Link>
             <div className="flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
               <button
                 type="button"
@@ -447,7 +453,7 @@ export default function CommunityGallery() {
                 </p>
                 <p className="text-xs text-slate-400">
                   {focusItem.student_id} · {focusItem.class_id} ·{" "}
-                  {focusItem.session_id} · {formatDate(focusItem.created_at)}
+                  {focusItem.assignment_id} · {formatDate(focusItem.created_at)}
                 </p>
               </div>
               <button

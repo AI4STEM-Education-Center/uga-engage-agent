@@ -106,17 +106,17 @@ export async function POST(request: Request) {
     const {
       students = [],
       classId,
-      sessionId,
+      assignmentId,
     } = (await request.json()) as {
       students?: Student[];
       classId?: string;
-      sessionId?: string;
+      assignmentId?: string;
     };
     const classKey = classId?.trim();
-    const sessionKey = sessionId?.trim();
-    if (!classKey || !sessionKey) {
+    const assignmentKey = assignmentId?.trim();
+    if (!classKey || !assignmentKey) {
       return NextResponse.json(
-        { error: "classId and sessionId are required." },
+        { error: "classId and assignmentId are required." },
         { status: 400 },
       );
     }
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
     for (const student of students) {
       const cachedPlanJson = await getCachedPlanJson(
         classKey,
-        sessionKey,
+        assignmentKey,
         student.id,
       );
       if (cachedPlanJson) {
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
 
       await upsertCachedPlanJson(
         classKey,
-        sessionKey,
+        assignmentKey,
         student.id,
         JSON.stringify(plan),
       );

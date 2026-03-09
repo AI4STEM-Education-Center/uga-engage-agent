@@ -58,14 +58,14 @@ export async function POST(request: Request) {
       plan,
       answers = {},
       classId,
-      sessionId,
+      assignmentId,
       studentId,
     } = (await request.json()) as {
       item: ContentItem;
       plan: Plan | null;
       answers?: Answers;
       classId?: string;
-      sessionId?: string;
+      assignmentId?: string;
       studentId?: string;
     };
 
@@ -91,11 +91,11 @@ export async function POST(request: Request) {
     let dataUrl = base64 ? `data:image/webp;base64,${base64}` : (url ?? "");
 
     // Persist to DB if we have enough context
-    if (item.id && classId && sessionId && studentId) {
+    if (item.id && classId && assignmentId && studentId) {
       try {
         await upsertMedia({
           classId,
-          sessionId,
+          assignmentId,
           studentId,
           contentItemId: item.id,
           mediaType: "image",
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
         // Prefer a shareable URL (e.g., presigned S3) for downstream video APIs.
         const persisted = await getMedia(
           classId,
-          sessionId,
+          assignmentId,
           studentId,
           item.id,
           "image",

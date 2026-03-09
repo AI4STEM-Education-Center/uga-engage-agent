@@ -103,16 +103,16 @@ export async function POST(request: Request) {
 
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const { student, classId, sessionId } = (await request.json()) as {
+    const { student, classId, assignmentId } = (await request.json()) as {
       student: Student;
       classId?: string;
-      sessionId?: string;
+      assignmentId?: string;
     };
     const classKey = classId?.trim();
-    const sessionKey = sessionId?.trim();
-    if (!classKey || !sessionKey) {
+    const assignmentKey = assignmentId?.trim();
+    if (!classKey || !assignmentKey) {
       return NextResponse.json(
-        { error: "classId and sessionId are required." },
+        { error: "classId and assignmentId are required." },
         { status: 400 },
       );
     }
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
 
     const cachedPlanJson = await getCachedPlanJson(
       classKey,
-      sessionKey,
+      assignmentKey,
       student.id,
     );
     if (cachedPlanJson) {
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
 
     await upsertCachedPlanJson(
       classKey,
-      sessionKey,
+      assignmentKey,
       student.id,
       JSON.stringify(plan),
     );

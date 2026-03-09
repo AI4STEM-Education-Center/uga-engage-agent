@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const requestId = request.nextUrl.searchParams.get("requestId");
   const contentItemId = request.nextUrl.searchParams.get("contentItemId");
   const classId = request.nextUrl.searchParams.get("classId");
-  const sessionId = request.nextUrl.searchParams.get("sessionId");
+  const assignmentId = request.nextUrl.searchParams.get("assignmentId");
   const studentId = request.nextUrl.searchParams.get("studentId");
 
   if (!requestId) {
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
 
     // Persist video to S3/DB before responding — must be awaited because
     // serverless Lambdas freeze after the response is sent.
-    if (contentItemId && classId && sessionId && studentId) {
+    if (contentItemId && classId && assignmentId && studentId) {
       try {
         const videoRes = await fetch(videoUrl);
         if (!videoRes.ok) {
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         const dataUrl = `data:video/mp4;base64,${base64}`;
         await upsertMedia({
           classId,
-          sessionId,
+          assignmentId,
           studentId,
           contentItemId,
           mediaType: "video",
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
         });
         const persisted = await getMedia(
           classId,
-          sessionId,
+          assignmentId,
           studentId,
           contentItemId,
           "video",
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       saveError =
-        "Missing one or more identifiers (contentItemId/classId/sessionId/studentId), so video was not saved.";
+        "Missing one or more identifiers (contentItemId/classId/assignmentId/studentId), so video was not saved.";
       console.warn("Video persist skipped:", saveError);
     }
 

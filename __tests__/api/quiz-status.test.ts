@@ -1,0 +1,101 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { GET, POST } from "@/app/api/quiz-status/route";
+
+// Mock nosql module
+vi.mock("@/lib/nosql", () => {
+  let store: Record<string, unknown> = {};
+  return {
+    getQuizStatus: vi.fn(async (classId: string, assignmentId: string) => {
+      return store[`${classId}:${assignmentId}`] ?? null;
+    }),
+    upsertQuizStatus: vi.fn(async (classId: string, assignmentId: string, lessonNumber: number, status: string, publishedBy?: string) => {
+      const record = { class_id: classId, assignment_id: assignmentId, lesson_number: lessonNumber, status, published_by: publishedBy, updated_at: new Date().toISOString() };
+      store[`${classId}:${assignmentId}`] = record;
+      return record;
+    }),
+    __resetStore: () => { store = {}; },
+  };
+});
+
+const { __resetStore } = await import("@/lib/nosql") as unknown as { __resetStore: () => void };
+
+beforeEach(() => {
+  __resetStore();
+});
+
+describe("GET /api/quiz-status", () => {
+  it("should return 400 if classId is missing", async () => {
+    const req = new Request("http://localhost:3000/api/quiz-status?assignmentId=a1");
+    const res = await GET(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("should return 400 if assignmentId is missing", async () => {
+    const req = new Request("http://localhost:3000/api/quiz-status?classId=c1");
+    const res = await GET(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("should return null when no quiz status exists", async () => {
+    const req = new Request("http://localhost:3000/api/quiz-status?classId=c1&assignmentId=a1");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.quizStatus).toBeNull();
+  });
+});
+
+describe("POST /api/quiz-status", () => {
+  it("should create a quiz status record", async () => {
+    const req = new Request("http://localhost:3000/api/quiz-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1", assignmentId: "a1", lessonNumber: 3, status: "draft" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.quizStatus.lesson_number).toBe(3);
+    expect(data.quizStatus.status).toBe("draft");
+  });
+
+  it("should publish a quiz", async () => {
+    // Create draft first
+    await POST(new Request("http://localhost:3000/api/quiz-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1", assignmentId: "a1", lessonNumber: 3, status: "draft" }),
+    }));
+
+    // Publish
+    const req = new Request("http://localhost:3000/api/quiz-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1", assignmentId: "a1", lessonNumber: 3, status: "published", publishedBy: "teacher-1" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.quizStatus.status).toBe("published");
+  });
+
+  it("should reject invalid status", async () => {
+    const req = new Request("http://localhost:3000/api/quiz-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1", assignmentId: "a1", lessonNumber: 3, status: "invalid" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("should reject missing fields", async () => {
+    const req = new Request("http://localhost:3000/api/quiz-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+});

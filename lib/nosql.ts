@@ -28,15 +28,57 @@ type MediaRecord = {
   s3_bucket?: string;
   s3_key?: string;
   class_id: string;
-  session_id: string;
+  assignment_id: string;
   student_id: string;
   created_at: string;
+};
+
+type QuizStatusRecord = {
+  class_id: string;
+  assignment_id: string;
+  lesson_number: number;
+  status: "draft" | "published" | "closed";
+  published_by?: string;
+  updated_at: string;
+};
+
+type StudentAnswerRecord = {
+  class_id: string;
+  assignment_id: string;
+  student_id: string;
+  student_name: string;
+  lesson_number: number;
+  answers: Record<string, string>;
+  submitted_at: string;
+};
+
+type ContentPublishRecord = {
+  class_id: string;
+  assignment_id: string;
+  content_item_id: string;
+  content_json: string;
+  published: boolean;
+  published_at: string;
+  published_by: string;
+};
+
+type ContentRatingRecord = {
+  class_id: string;
+  assignment_id: string;
+  student_id: string;
+  content_item_id: string;
+  rating: number;
+  rated_at: string;
 };
 
 type Store = {
   strategy_cache: Record<string, StrategyCacheRecord>;
   teacher_annotations: TeacherAnnotation[];
   media: MediaRecord[];
+  quiz_status: QuizStatusRecord[];
+  student_answers: StudentAnswerRecord[];
+  content_publish: ContentPublishRecord[];
+  content_ratings: ContentRatingRecord[];
 };
 
 type TeacherAnnotation = {
@@ -62,6 +104,10 @@ const emptyStore: Store = {
   strategy_cache: {},
   teacher_annotations: [],
   media: [],
+  quiz_status: [],
+  student_answers: [],
+  content_publish: [],
+  content_ratings: [],
 };
 const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "engage-nosql.json");
@@ -73,6 +119,9 @@ const dynamoAccessKeyId = process.env.ENGAGE_AWS_ACCESS_KEY_ID;
 const dynamoSecretAccessKey = process.env.ENGAGE_AWS_SECRET_ACCESS_KEY;
 const s3Bucket = process.env.ENGAGE_S3_BUCKET;
 const s3Region = process.env.ENGAGE_AWS_REGION ?? process.env.AWS_REGION ?? "us-east-1";
+
+const toPlainStudentId = (value: string | undefined, fallback = "") =>
+  value?.replace(/^STUDENT#/, "") ?? fallback;
 
 let s3Client: S3Client | null = null;
 
@@ -163,6 +212,18 @@ const loadStore = async () => {
       if (!Array.isArray(parsed.media)) {
         parsed.media = [];
       }
+      if (!Array.isArray(parsed.quiz_status)) {
+        parsed.quiz_status = [];
+      }
+      if (!Array.isArray(parsed.student_answers)) {
+        parsed.student_answers = [];
+      }
+      if (!Array.isArray(parsed.content_publish)) {
+        parsed.content_publish = [];
+      }
+      if (!Array.isArray(parsed.content_ratings)) {
+        parsed.content_ratings = [];
+      }
       storeCache = parsed;
       return parsed;
     })();
@@ -188,7 +249,7 @@ const withWriteLock = async <T>(fn: () => Promise<T>) => {
 
 export const getCachedPlanJson = async (
   classId: string,
-  sessionId: string,
+  assignmentId: string,
   studentId: string,
 ) => {
   if (useDynamoDb) {
@@ -201,7 +262,7 @@ export const getCachedPlanJson = async (
         TableName: dynamoTableName,
         Key: {
           [pkField]: `CLASS#${classId}`,
-          [skField]: `PLAN#SESSION#${sessionId}#STUDENT#${studentId}#LATEST`,
+          [skField]: `PLAN#ASSIGN#${assignmentId}#STUDENT#${studentId}#LATEST`,
         },
       }),
     );
@@ -214,7 +275,7 @@ export const getCachedPlanJson = async (
 
 export const upsertCachedPlanJson = async (
   classId: string,
-  sessionId: string,
+  assignmentId: string,
   studentId: string,
   planJson: string,
 ) => {
@@ -228,14 +289,12 @@ export const upsertCachedPlanJson = async (
       new PutCommand({
         TableName: dynamoTableName,
         Item: {
-          // Partition/sort keys — must not be overwritten
           [pkField]: `CLASS#${classId}`,
-          [skField]: `PLAN#SESSION#${sessionId}#STUDENT#${studentId}#LATEST`,
+          [skField]: `PLAN#ASSIGN#${assignmentId}#STUDENT#${studentId}#LATEST`,
           record_type: "plan_cache",
-          session_id: sessionId,
-          // GSI keys: student_id (PK) and student_record_id (SK); plain ID extracted via STUDENT# prefix when reading
+          assignment_id: assignmentId,
           [gsiStudentPkField]: `STUDENT#${studentId}`,
-          [gsiStudentSkField]: `PLAN#SESSION#${sessionId}#LATEST`,
+          [gsiStudentSkField]: `PLAN#ASSIGN#${assignmentId}#LATEST`,
           plan_json: planJson,
           updated_at: updatedAt,
         },
@@ -256,7 +315,7 @@ export const upsertCachedPlanJson = async (
 
 export type CachedPlanRecord = {
   student_id: string;
-  session_id: string;
+  assignment_id: string;
   class_id: string;
   plan_json: string;
   updated_at: string;
@@ -268,7 +327,7 @@ export type CachedPlanRecord = {
  */
 export const listCachedPlans = async (
   classId: string,
-  sessionId: string,
+  assignmentId: string,
   studentId?: string,
 ): Promise<CachedPlanRecord[]> => {
   if (useDynamoDb) {
@@ -278,13 +337,12 @@ export const listCachedPlans = async (
     }
 
     if (studentId) {
-      // Specific student — use direct GetItem (cheaper than query)
       const result = await client.send(
         new GetCommand({
           TableName: dynamoTableName,
           Key: {
             [pkField]: `CLASS#${classId}`,
-            [skField]: `PLAN#SESSION#${sessionId}#STUDENT#${studentId}#LATEST`,
+            [skField]: `PLAN#ASSIGN#${assignmentId}#STUDENT#${studentId}#LATEST`,
           },
         }),
       );
@@ -296,7 +354,7 @@ export const listCachedPlans = async (
       return [
         {
           student_id: plain,
-          session_id: (result.Item.session_id as string) ?? sessionId,
+          assignment_id: (result.Item.assignment_id as string) ?? assignmentId,
           class_id: classId,
           plan_json: result.Item.plan_json as string,
           updated_at: (result.Item.updated_at as string) ?? "",
@@ -304,7 +362,6 @@ export const listCachedPlans = async (
       ];
     }
 
-    // All students in this class+session — query by PK + SK prefix
     const result = await client.send(
       new QueryCommand({
         TableName: dynamoTableName,
@@ -316,21 +373,18 @@ export const listCachedPlans = async (
         },
         ExpressionAttributeValues: {
           ":pk": `CLASS#${classId}`,
-          ":skPrefix": `PLAN#SESSION#${sessionId}#STUDENT#`,
+          ":skPrefix": `PLAN#ASSIGN#${assignmentId}#STUDENT#`,
         },
       }),
     );
 
-    const plainStudentId = (sid: string) =>
-      sid?.replace(/^STUDENT#/, "") ?? "";
-
     return (result.Items ?? [])
       .filter((item) => item.record_type === "plan_cache" && item.plan_json)
       .map((item) => ({
-        student_id: plainStudentId(item.student_id as string) ||
+        student_id: toPlainStudentId(item.student_id as string) ||
           (item.student_id as string) ||
           "",
-        session_id: (item.session_id as string) ?? sessionId,
+        assignment_id: (item.assignment_id as string) ?? assignmentId,
         class_id: classId,
         plan_json: item.plan_json as string,
         updated_at: (item.updated_at as string) ?? "",
@@ -346,7 +400,7 @@ export const listCachedPlans = async (
     }
     records.push({
       student_id: sid,
-      session_id: sessionId,
+      assignment_id: assignmentId,
       class_id: classId,
       plan_json: record.plan_json,
       updated_at: record.updated_at,
@@ -402,7 +456,7 @@ export const recordTeacherAnnotation = async (
 
 export type UpsertMediaInput = {
   classId: string;
-  sessionId: string;
+  assignmentId: string;
   studentId: string;
   contentItemId: string;
   mediaType: "image" | "video";
@@ -415,26 +469,26 @@ const mediaExt = (mime: string) =>
 
 /**
  * Store (or replace) a generated image/video for a specific content item.
- * Key: classId + sessionId + studentId + contentItemId + mediaType
+ * Key: classId + assignmentId + studentId + contentItemId + mediaType
  * When using DynamoDB: stores in S3 if ENGAGE_S3_BUCKET is set (avoids 400KB limit).
  */
 export const upsertMedia = async (input: UpsertMediaInput) => {
   const {
     classId,
-    sessionId,
+    assignmentId,
     studentId,
     contentItemId,
     mediaType,
     mimeType,
     dataUrl,
   } = input;
-  const mediaId = `${classId}_${sessionId}_${studentId}_${contentItemId}_${mediaType}`;
+  const mediaId = `${classId}_${assignmentId}_${studentId}_${contentItemId}_${mediaType}`;
   const createdAt = new Date().toISOString();
 
   if (useDynamoDb) {
     const client = getDynamoClient();
     if (!client) {
-      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
     }
 
     const s3 = getS3Client();
@@ -445,7 +499,7 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
         ? Buffer.from(base64Match[1], "base64")
         : Buffer.from(dataUrl, "utf-8");
       const ext = mediaExt(mimeType);
-      const s3Key = `media/${classId}/${sessionId}/${studentId}/${contentItemId}_${mediaType}.${ext}`;
+      const s3Key = `media/${classId}/${assignmentId}/${studentId}/${contentItemId}_${mediaType}.${ext}`;
 
       await s3.send(
         new PutObjectCommand({
@@ -461,11 +515,11 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
           TableName: dynamoTableName,
           Item: {
             [pkField]: `CLASS#${classId}`,
-            [skField]: `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+            [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
             record_type: "media",
-            session_id: sessionId,
+            assignment_id: assignmentId,
             [gsiStudentPkField]: `STUDENT#${studentId}`,
-            [gsiStudentSkField]: `MEDIA#SESSION#${sessionId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+            [gsiStudentSkField]: `MEDIA#ASSIGN#${assignmentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
             media_id: mediaId,
             content_item_id: contentItemId,
             media_type: mediaType,
@@ -476,7 +530,7 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
           },
         }),
       );
-      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
     }
 
     // No S3: only persist if under DynamoDB limit
@@ -485,7 +539,7 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
       console.warn(
         `Media ${mediaId} exceeds DynamoDB 400KB limit (${Math.round(itemSize / 1024)}KB). Set ENGAGE_S3_BUCKET to store in S3.`,
       );
-      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
     }
 
     await client.send(
@@ -493,11 +547,11 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
         TableName: dynamoTableName,
         Item: {
           [pkField]: `CLASS#${classId}`,
-          [skField]: `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+          [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
           record_type: "media",
-          session_id: sessionId,
+          assignment_id: assignmentId,
           [gsiStudentPkField]: `STUDENT#${studentId}`,
-          [gsiStudentSkField]: `MEDIA#SESSION#${sessionId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+          [gsiStudentSkField]: `MEDIA#ASSIGN#${assignmentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
           media_id: mediaId,
           content_item_id: contentItemId,
           media_type: mediaType,
@@ -507,7 +561,7 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
         },
       }),
     );
-    return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, data_url: dataUrl, class_id: classId, session_id: sessionId, student_id: studentId, created_at: createdAt };
+    return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, data_url: dataUrl, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
   }
 
   // Local JSON: store data_url (no size limit)
@@ -518,7 +572,7 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
     mime_type: mimeType,
     data_url: dataUrl,
     class_id: classId,
-    session_id: sessionId,
+    assignment_id: assignmentId,
     student_id: studentId,
     created_at: createdAt,
   };
@@ -582,7 +636,7 @@ async function resolveMediaUrl(record: MediaRecord): Promise<MediaRecord> {
  */
 export const getMedia = async (
   classId: string,
-  sessionId: string,
+  assignmentId: string,
   studentId: string,
   contentItemId: string,
   mediaType: "image" | "video",
@@ -597,7 +651,7 @@ export const getMedia = async (
         TableName: dynamoTableName,
         Key: {
           [pkField]: `CLASS#${classId}`,
-          [skField]: `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+          [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
         },
       }),
     );
@@ -613,13 +667,13 @@ export const getMedia = async (
       s3_bucket: result.Item.s3_bucket as string | undefined,
       s3_key: result.Item.s3_key as string | undefined,
       class_id: classId,
-      session_id: sessionId,
+      assignment_id: assignmentId,
       student_id: studentId,
       created_at: (result.Item.created_at as string) ?? "",
     };
   } else {
     const store = await loadStore();
-    const mediaId = `${classId}_${sessionId}_${studentId}_${contentItemId}_${mediaType}`;
+    const mediaId = `${classId}_${assignmentId}_${studentId}_${contentItemId}_${mediaType}`;
     record = store.media.find((m) => m.media_id === mediaId) ?? null;
   }
 
@@ -633,7 +687,7 @@ export const getMedia = async (
  */
 export const listMedia = async (
   classId: string,
-  sessionId: string,
+  assignmentId: string,
   studentId: string,
   contentItemId?: string,
   mediaType?: "image" | "video",
@@ -645,7 +699,7 @@ export const listMedia = async (
     }
 
     // Query by PK + SK prefix for the student's media in this session
-    let skPrefix = `MEDIA#SESSION#${sessionId}#STUDENT#${studentId}#`;
+    let skPrefix = `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#`;
     if (contentItemId) {
       skPrefix += `ITEM#${contentItemId}#`;
       if (mediaType) {
@@ -683,7 +737,7 @@ export const listMedia = async (
         s3_bucket: item.s3_bucket as string | undefined,
         s3_key: item.s3_key as string | undefined,
         class_id: classId,
-        session_id: sessionId,
+        assignment_id: assignmentId,
         student_id: studentId,
         created_at: (item.created_at as string) ?? "",
       }));
@@ -694,7 +748,7 @@ export const listMedia = async (
   const store = await loadStore();
   const records = store.media.filter((m) => {
     if (m.class_id !== classId) return false;
-    if (m.session_id !== sessionId) return false;
+    if (m.assignment_id !== assignmentId) return false;
     if (m.student_id !== studentId) return false;
     if (contentItemId && m.content_item_id !== contentItemId) return false;
     if (mediaType && m.media_type !== mediaType) return false;
@@ -714,7 +768,7 @@ export type GalleryItem = {
   mime_type: string;
   url: string;
   class_id: string;
-  session_id: string;
+  assignment_id: string;
   student_id: string;
   created_at: string;
   s3_key?: string;
@@ -775,8 +829,8 @@ export const listAllMedia = async (options: {
           s3_bucket: item.s3_bucket as string | undefined,
           s3_key: item.s3_key as string | undefined,
           class_id: (item.class_id as string) ?? "",
-          session_id: (item.session_id as string) ?? "",
-          student_id: ((item.student_id as string) ?? "").replace(/^STUDENT#/, ""),
+          assignment_id: (item.assignment_id as string) ?? "",
+          student_id: toPlainStudentId(item.student_id as string),
           created_at: (item.created_at as string) ?? "",
         });
       }
@@ -788,7 +842,7 @@ export const listAllMedia = async (options: {
     const filtered = search
       ? allRecords.filter((m) => {
           const q = search.toLowerCase();
-          const haystack = `${m.content_item_id} ${m.class_id} ${m.session_id} ${m.student_id}`.toLowerCase();
+          const haystack = `${m.content_item_id} ${m.class_id} ${m.assignment_id} ${m.student_id}`.toLowerCase();
           return haystack.includes(q);
         })
       : allRecords;
@@ -808,7 +862,7 @@ export const listAllMedia = async (options: {
         mime_type: r.mime_type,
         url: r.data_url ?? "",
         class_id: r.class_id,
-        session_id: r.session_id,
+        assignment_id: r.assignment_id,
         student_id: r.student_id,
         created_at: r.created_at,
         s3_key: r.s3_key,
@@ -819,11 +873,11 @@ export const listAllMedia = async (options: {
 
   // Local JSON fallback
   const store = await loadStore();
-  let records = store.media.filter((m) => {
+  const records = store.media.filter((m) => {
     if (mediaType && m.media_type !== mediaType) return false;
     if (search) {
       const q = search.toLowerCase();
-      const haystack = `${m.content_item_id} ${m.class_id} ${m.session_id} ${m.student_id}`.toLowerCase();
+      const haystack = `${m.content_item_id} ${m.class_id} ${m.assignment_id} ${m.student_id}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
@@ -844,11 +898,421 @@ export const listAllMedia = async (options: {
       mime_type: r.mime_type,
       url: r.data_url ?? "",
       class_id: r.class_id,
-      session_id: r.session_id,
+      assignment_id: r.assignment_id,
       student_id: r.student_id,
       created_at: r.created_at,
       s3_key: r.s3_key,
     })),
     nextCursor: hasMore ? String(startIndex + limit) : null,
   };
+};
+
+/* ------------------------------------------------------------------ */
+/*  Quiz status                                                        */
+/* ------------------------------------------------------------------ */
+
+export const getQuizStatus = async (
+  classId: string,
+  assignmentId: string,
+): Promise<QuizStatusRecord | null> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return null;
+    const result = await client.send(
+      new GetCommand({
+        TableName: dynamoTableName,
+        Key: {
+          [pkField]: `CLASS#${classId}`,
+          [skField]: `QUIZ_STATUS#ASSIGN#${assignmentId}`,
+        },
+      }),
+    );
+    if (!result.Item) return null;
+    return {
+      class_id: classId,
+      assignment_id: assignmentId,
+      lesson_number: (result.Item.lesson_number as number) ?? 0,
+      status: (result.Item.status as QuizStatusRecord["status"]) ?? "draft",
+      published_by: result.Item.published_by as string | undefined,
+      updated_at: (result.Item.updated_at as string) ?? "",
+    };
+  }
+
+  const store = await loadStore();
+  return (
+    store.quiz_status.find(
+      (q) => q.class_id === classId && q.assignment_id === assignmentId,
+    ) ?? null
+  );
+};
+
+export const upsertQuizStatus = async (
+  classId: string,
+  assignmentId: string,
+  lessonNumber: number,
+  status: QuizStatusRecord["status"],
+  publishedBy?: string,
+): Promise<QuizStatusRecord> => {
+  const updatedAt = new Date().toISOString();
+  const record: QuizStatusRecord = {
+    class_id: classId,
+    assignment_id: assignmentId,
+    lesson_number: lessonNumber,
+    status,
+    published_by: publishedBy,
+    updated_at: updatedAt,
+  };
+
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (client) {
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: `CLASS#${classId}`,
+            [skField]: `QUIZ_STATUS#ASSIGN#${assignmentId}`,
+            record_type: "quiz_status",
+            lesson_number: lessonNumber,
+            status,
+            published_by: publishedBy,
+            updated_at: updatedAt,
+          },
+        }),
+      );
+    }
+    return record;
+  }
+
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const idx = store.quiz_status.findIndex(
+      (q) => q.class_id === classId && q.assignment_id === assignmentId,
+    );
+    if (idx >= 0) {
+      store.quiz_status[idx] = record;
+    } else {
+      store.quiz_status.push(record);
+    }
+    await persistStore(store);
+  });
+  return record;
+};
+
+/* ------------------------------------------------------------------ */
+/*  Student answers                                                    */
+/* ------------------------------------------------------------------ */
+
+export const upsertStudentAnswer = async (
+  input: StudentAnswerRecord,
+): Promise<StudentAnswerRecord> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (client) {
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: `CLASS#${input.class_id}`,
+            [skField]: `ANSWER#ASSIGN#${input.assignment_id}#STUDENT#${input.student_id}`,
+            record_type: "student_answer",
+            [gsiStudentPkField]: `STUDENT#${input.student_id}`,
+            [gsiStudentSkField]: `ANSWER#ASSIGN#${input.assignment_id}`,
+            assignment_id: input.assignment_id,
+            student_name: input.student_name,
+            lesson_number: input.lesson_number,
+            answers: input.answers,
+            submitted_at: input.submitted_at,
+          },
+        }),
+      );
+    }
+    return input;
+  }
+
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const idx = store.student_answers.findIndex(
+      (a) =>
+        a.class_id === input.class_id &&
+        a.assignment_id === input.assignment_id &&
+        a.student_id === input.student_id,
+    );
+    if (idx >= 0) {
+      store.student_answers[idx] = input;
+    } else {
+      store.student_answers.push(input);
+    }
+    await persistStore(store);
+  });
+  return input;
+};
+
+export const listStudentAnswers = async (
+  classId: string,
+  assignmentId: string,
+): Promise<StudentAnswerRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new QueryCommand({
+        TableName: dynamoTableName,
+        KeyConditionExpression:
+          "#pk = :pk AND begins_with(#sk, :skPrefix)",
+        ExpressionAttributeNames: {
+          "#pk": pkField,
+          "#sk": skField,
+        },
+        ExpressionAttributeValues: {
+          ":pk": `CLASS#${classId}`,
+          ":skPrefix": `ANSWER#ASSIGN#${assignmentId}#STUDENT#`,
+        },
+      }),
+    );
+    return (result.Items ?? [])
+      .filter((item) => item.record_type === "student_answer")
+      .map((item) => ({
+        class_id: (item.class_id as string) ?? classId,
+        assignment_id: (item.assignment_id as string) ?? assignmentId,
+        student_id: toPlainStudentId(item.student_id as string),
+        student_name: (item.student_name as string) ?? "",
+        lesson_number: (item.lesson_number as number) ?? 0,
+        answers: (item.answers as Record<string, string>) ?? {},
+        submitted_at: (item.submitted_at as string) ?? "",
+      }));
+  }
+
+  const store = await loadStore();
+  return store.student_answers.filter(
+    (a) => a.class_id === classId && a.assignment_id === assignmentId,
+  );
+};
+
+export const getStudentAnswer = async (
+  classId: string,
+  assignmentId: string,
+  studentId: string,
+): Promise<StudentAnswerRecord | null> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return null;
+    const result = await client.send(
+      new GetCommand({
+        TableName: dynamoTableName,
+        Key: {
+          [pkField]: `CLASS#${classId}`,
+          [skField]: `ANSWER#ASSIGN#${assignmentId}#STUDENT#${studentId}`,
+        },
+      }),
+    );
+    if (!result.Item) return null;
+    return {
+      class_id: classId,
+      assignment_id: assignmentId,
+      student_id: studentId,
+      student_name: (result.Item.student_name as string) ?? "",
+      lesson_number: (result.Item.lesson_number as number) ?? 0,
+      answers: (result.Item.answers as Record<string, string>) ?? {},
+      submitted_at: (result.Item.submitted_at as string) ?? "",
+    };
+  }
+
+  const store = await loadStore();
+  return (
+    store.student_answers.find(
+      (a) =>
+        a.class_id === classId &&
+        a.assignment_id === assignmentId &&
+        a.student_id === studentId,
+    ) ?? null
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Content publish                                                    */
+/* ------------------------------------------------------------------ */
+
+export const upsertContentPublish = async (
+  input: ContentPublishRecord,
+): Promise<ContentPublishRecord> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (client) {
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: `CLASS#${input.class_id}`,
+            [skField]: `CONTENT_PUB#ASSIGN#${input.assignment_id}#ITEM#${input.content_item_id}`,
+            record_type: "content_publish",
+            assignment_id: input.assignment_id,
+            content_item_id: input.content_item_id,
+            content_json: input.content_json,
+            published: input.published,
+            published_at: input.published_at,
+            published_by: input.published_by,
+          },
+        }),
+      );
+    }
+    return input;
+  }
+
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const idx = store.content_publish.findIndex(
+      (c) =>
+        c.class_id === input.class_id &&
+        c.assignment_id === input.assignment_id &&
+        c.content_item_id === input.content_item_id,
+    );
+    if (idx >= 0) {
+      store.content_publish[idx] = input;
+    } else {
+      store.content_publish.push(input);
+    }
+    await persistStore(store);
+  });
+  return input;
+};
+
+export const listPublishedContent = async (
+  classId: string,
+  assignmentId: string,
+): Promise<ContentPublishRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new QueryCommand({
+        TableName: dynamoTableName,
+        KeyConditionExpression:
+          "#pk = :pk AND begins_with(#sk, :skPrefix)",
+        ExpressionAttributeNames: {
+          "#pk": pkField,
+          "#sk": skField,
+        },
+        ExpressionAttributeValues: {
+          ":pk": `CLASS#${classId}`,
+          ":skPrefix": `CONTENT_PUB#ASSIGN#${assignmentId}#ITEM#`,
+        },
+      }),
+    );
+    return (result.Items ?? [])
+      .filter((item) => item.record_type === "content_publish" && item.published)
+      .map((item) => ({
+        class_id: (item.class_id as string) ?? classId,
+        assignment_id: (item.assignment_id as string) ?? assignmentId,
+        content_item_id: (item.content_item_id as string) ?? "",
+        content_json: (item.content_json as string) ?? "{}",
+        published: true,
+        published_at: (item.published_at as string) ?? "",
+        published_by: (item.published_by as string) ?? "",
+      }));
+  }
+
+  const store = await loadStore();
+  return store.content_publish.filter(
+    (c) =>
+      c.class_id === classId &&
+      c.assignment_id === assignmentId &&
+      c.published,
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Content ratings                                                    */
+/* ------------------------------------------------------------------ */
+
+export const upsertContentRating = async (
+  input: ContentRatingRecord,
+): Promise<ContentRatingRecord> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (client) {
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: `CLASS#${input.class_id}`,
+            [skField]: `RATING#ASSIGN#${input.assignment_id}#STUDENT#${input.student_id}#ITEM#${input.content_item_id}`,
+            record_type: "content_rating",
+            [gsiStudentPkField]: `STUDENT#${input.student_id}`,
+            [gsiStudentSkField]: `RATING#ASSIGN#${input.assignment_id}#ITEM#${input.content_item_id}`,
+            assignment_id: input.assignment_id,
+            content_item_id: input.content_item_id,
+            rating: input.rating,
+            rated_at: input.rated_at,
+          },
+        }),
+      );
+    }
+    return input;
+  }
+
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const idx = store.content_ratings.findIndex(
+      (r) =>
+        r.class_id === input.class_id &&
+        r.assignment_id === input.assignment_id &&
+        r.student_id === input.student_id &&
+        r.content_item_id === input.content_item_id,
+    );
+    if (idx >= 0) {
+      store.content_ratings[idx] = input;
+    } else {
+      store.content_ratings.push(input);
+    }
+    await persistStore(store);
+  });
+  return input;
+};
+
+export const listContentRatings = async (
+  classId: string,
+  assignmentId: string,
+  studentId?: string,
+): Promise<ContentRatingRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const skPrefix = studentId
+      ? `RATING#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#`
+      : `RATING#ASSIGN#${assignmentId}#STUDENT#`;
+    const result = await client.send(
+      new QueryCommand({
+        TableName: dynamoTableName,
+        KeyConditionExpression:
+          "#pk = :pk AND begins_with(#sk, :skPrefix)",
+        ExpressionAttributeNames: {
+          "#pk": pkField,
+          "#sk": skField,
+        },
+        ExpressionAttributeValues: {
+          ":pk": `CLASS#${classId}`,
+          ":skPrefix": skPrefix,
+        },
+      }),
+    );
+    return (result.Items ?? [])
+      .filter((item) => item.record_type === "content_rating")
+      .map((item) => ({
+        class_id: (item.class_id as string) ?? classId,
+        assignment_id: (item.assignment_id as string) ?? assignmentId,
+        student_id: toPlainStudentId(item.student_id as string),
+        content_item_id: (item.content_item_id as string) ?? "",
+        rating: (item.rating as number) ?? 0,
+        rated_at: (item.rated_at as string) ?? "",
+      }));
+  }
+
+  const store = await loadStore();
+  return store.content_ratings.filter((r) => {
+    if (r.class_id !== classId) return false;
+    if (r.assignment_id !== assignmentId) return false;
+    if (studentId && r.student_id !== studentId) return false;
+    return true;
+  });
 };

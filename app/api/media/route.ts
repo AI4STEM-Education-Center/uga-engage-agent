@@ -8,7 +8,7 @@ import { getMedia, listMedia } from "@/lib/nosql";
  *
  * Query parameters:
  *   - classId (required)
- *   - sessionId (required)
+ *   - assignmentId (required)
  *   - studentId (required)
  *   - contentItemId (optional) — filter to a specific content item
  *   - mediaType (optional) — "image" or "video"
@@ -19,7 +19,7 @@ import { getMedia, listMedia } from "@/lib/nosql";
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const classId = params.get("classId");
-  const sessionId = params.get("sessionId");
+  const assignmentId = params.get("assignmentId");
   const studentId = params.get("studentId");
   const contentItemId = params.get("contentItemId");
   const mediaType = params.get("mediaType") as
@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
     | "video"
     | null;
 
-  if (!classId || !sessionId || !studentId) {
+  if (!classId || !assignmentId || !studentId) {
     return NextResponse.json(
-      { error: "classId, sessionId, and studentId are required." },
+      { error: "classId, assignmentId, and studentId are required." },
       { status: 400 },
     );
   }
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     if (contentItemId && mediaType) {
       const record = await getMedia(
         classId,
-        sessionId,
+        assignmentId,
         studentId,
         contentItemId,
         mediaType,
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     // List media
     const records = await listMedia(
       classId,
-      sessionId,
+      assignmentId,
       studentId,
       contentItemId ?? undefined,
       mediaType ?? undefined,

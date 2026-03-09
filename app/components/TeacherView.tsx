@@ -1,0 +1,1623 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import type { UserContext } from "@/lib/auth";
+import {
+  engagementStrategies as strategies,
+  getEngagementStrategyDescription,
+  getEngagementStrategyLabel,
+} from "@/lib/engagement-strategies";
+import type {
+  Plan,
+  ContentItem,
+  ImageState,
+  VideoState,
+  StudentStrategyResult,
+  Lesson,
+  QuizItem,
+  StudentAnswer,
+} from "@/lib/types";
+
+type Props = {
+  user: UserContext;
+};
+
+type PersistedDraft = {
+  version: number;
+  classId: string;
+  assignmentId: string;
+  lessonNumber: number | null;
+  currentStep: number;
+  plan: Plan | null;
+  selectedStrategies: string[];
+  annotationDecision: "agree" | "disagree" | null;
+  annotationReason: string;
+  annotationStatus: "idle" | "saved";
+  content: ContentItem[];
+  images?: Record<string, ImageState>;
+  videos?: Record<string, VideoState>;
+  selectedForPublish?: string[];
+  publishedContentIds?: string[];
+};
+
+
+const LEGACY_DRAFT_STORAGE_KEY = "engage-agent:draft:v2";
+const DRAFT_STORAGE_PREFIX = "engage-agent:draft:v3";
+const DRAFT_VERSION = 2;
+
+const clampStep = (value: number) => Math.min(3, Math.max(1, value));
+
+const getDraftStorageKey = (classId: string, assignmentId: string) =>
+  `${DRAFT_STORAGE_PREFIX}:${classId || "__no-class__"}:${assignmentId || "__no-assignment__"}`;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parsePersistedContentItem = (
+  value: unknown,
+  fallbackId?: string,
+): ContentItem | null => {
+  if (!isRecord(value)) return null;
+
+  const id = typeof value.id === "string" ? value.id : fallbackId;
+  const type = typeof value.type === "string" ? value.type : "";
+  const title = typeof value.title === "string" ? value.title : "";
+  const body = typeof value.body === "string" ? value.body : "";
+  const strategy = typeof value.strategy === "string" ? value.strategy : "";
+
+  if (!id || !title || !body) return null;
+
+  return {
+    id,
+    type,
+    title,
+    body,
+    strategy,
+  };
+};
+
+const stepLabels = [
+  "Lesson & quiz",
+  "Strategy recommendation",
+  "Content generation",
+];
+
+export default function TeacherView({ user }: Props) {
+  const downloadRef = useRef<HTMLAnchorElement>(null);
+  const isMountedRef = useRef(true);
+  const activeVideoPollersRef = useRef<Set<string>>(new Set());
+  const classId = user.classId ?? "";
+  const assignmentId = user.assignmentId ?? "";
+  const hasAssignmentContext = Boolean(classId && assignmentId);
+  const draftStorageKey = getDraftStorageKey(classId, assignmentId);
+
+  // Lesson picker
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<number | null>(null);
+  const [quizItems, setQuizItems] = useState<QuizItem[]>([]);
+  const [quizStatus, setQuizStatus] = useState<"draft" | "published" | "closed">("draft");
+  const [publishingQuiz, setPublishingQuiz] = useState(false);
+
+  // Student answers
+  const [studentAnswers, setStudentAnswers] = useState<StudentAnswer[]>([]);
+  const [loadingAnswers, setLoadingAnswers] = useState(false);
+
+  // Plan
+  const [plan, setPlan] = useState<Plan | null>(null);
+
+  // Content
+  const [content, setContent] = useState<ContentItem[]>([]);
+  const [loadingContent, setLoadingContent] = useState(false);
+  const [images, setImages] = useState<Record<string, ImageState>>({});
+  const [videos, setVideos] = useState<Record<string, VideoState>>({});
+  const [focusImage, setFocusImage] = useState<{ url: string; title: string } | null>(null);
+  const [focusVideo, setFocusVideo] = useState<{ url: string; title: string } | null>(null);
+
+  // Content publishing
+  const [selectedForPublish, setSelectedForPublish] = useState<Set<string>>(new Set());
+  const [publishingContent, setPublishingContent] = useState(false);
+  const [publishedContentIds, setPublishedContentIds] = useState<Set<string>>(new Set());
+
+  // Strategy
+  const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
+  const [annotationDecision, setAnnotationDecision] = useState<"agree" | "disagree" | null>(null);
+  const [annotationReason, setAnnotationReason] = useState("");
+  const [annotationStatus, setAnnotationStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
+
+  // Cohort
+  const [cohortResults, setCohortResults] = useState<StudentStrategyResult[]>([]);
+  const [cohortDistribution, setCohortDistribution] = useState<Record<string, number>>({});
+  const [loadingCohort, setLoadingCohort] = useState(false);
+  const [cohortProgress, setCohortProgress] = useState<{ processed: number; total: number; currentName: string }>({ processed: 0, total: 0, currentName: "" });
+  const [showStudentRecommendations, setShowStudentRecommendations] = useState(false);
+  const [showCohortHelp, setShowCohortHelp] = useState(false);
+  const [openStrategyInfo, setOpenStrategyInfo] = useState<Set<string>>(new Set());
+
+
+  // General
+  const [error, setError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isRestoringDraftMedia, setIsRestoringDraftMedia] = useState(false);
+  const [isRestoringPublishedState, setIsRestoringPublishedState] = useState(false);
+  const isRestoringStep3State = isRestoringDraftMedia || isRestoringPublishedState;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const getStrategyLabel = getEngagementStrategyLabel;
+
+  const getStrategyDescription = getEngagementStrategyDescription;
+
+  const buildDraftSnapshot = useCallback(
+    (nextVideos?: Record<string, VideoState>): PersistedDraft => {
+      const serializableImages = Object.fromEntries(
+        Object.entries(images).filter(([, state]) => state.status === "ready" || state.status === "error"),
+      ) as Record<string, ImageState>;
+      const serializableVideos = Object.fromEntries(
+        Object.entries(nextVideos ?? videos).filter(([, state]) => state.status !== "idle"),
+      ) as Record<string, VideoState>;
+
+      return {
+        version: DRAFT_VERSION,
+        classId,
+        assignmentId,
+        lessonNumber: selectedLesson,
+        currentStep: clampStep(currentStep),
+        plan,
+        selectedStrategies,
+        annotationDecision,
+        annotationReason,
+        annotationStatus: annotationStatus === "saved" ? "saved" : "idle",
+        content,
+        images: serializableImages,
+        videos: serializableVideos,
+        selectedForPublish: Array.from(selectedForPublish),
+        publishedContentIds: Array.from(publishedContentIds),
+      };
+    },
+    [
+      classId,
+      assignmentId,
+      selectedLesson,
+      currentStep,
+      plan,
+      selectedStrategies,
+      annotationDecision,
+      annotationReason,
+      annotationStatus,
+      content,
+      images,
+      videos,
+      selectedForPublish,
+      publishedContentIds,
+    ],
+  );
+
+  const toggleStrategyInfo = (strategyId: string) => {
+    setOpenStrategyInfo((prev) => {
+      const next = new Set(prev);
+      if (next.has(strategyId)) {
+        next.delete(strategyId);
+      } else {
+        next.add(strategyId);
+      }
+      return next;
+    });
+  };
+
+  const buildCohortDistribution = (results: StudentStrategyResult[]) => {
+    const distribution: Record<string, number> = {};
+    results.forEach((result) => {
+      distribution[result.plan.strategy] = (distribution[result.plan.strategy] ?? 0) + 1;
+    });
+    return distribution;
+  };
+
+  const buildCohortMasterPlan = (
+    results: StudentStrategyResult[],
+    distribution: Record<string, number>,
+  ): Plan | null => {
+    if (results.length === 0) {
+      return null;
+    }
+
+    const rankedStrategies = strategies
+      .map((strategy) => {
+        const matchingResults = results.filter((result) => result.plan.strategy === strategy.id);
+        const averageRelevance = matchingResults.length > 0
+          ? Math.round(
+              matchingResults.reduce((sum, result) => sum + (result.plan.relevance?.[strategy.id] ?? 0), 0) / matchingResults.length,
+            )
+          : 0;
+
+        return {
+          id: strategy.id,
+          label: strategy.label,
+          count: distribution[strategy.id] ?? 0,
+          averageRelevance,
+          matchingResults,
+        };
+      })
+      .sort((left, right) => right.count - left.count || right.averageRelevance - left.averageRelevance);
+
+    const primary = rankedStrategies[0];
+    const representative = primary.matchingResults
+      .slice()
+      .sort((left, right) => (right.plan.relevance?.[primary.id] ?? 0) - (left.plan.relevance?.[primary.id] ?? 0))[0] ?? results[0];
+
+    const relevance = Object.fromEntries(
+      strategies.map((strategy) => [
+        strategy.id,
+        Math.round(((distribution[strategy.id] ?? 0) / results.length) * 100),
+      ]),
+    ) as Record<string, number>;
+
+    const supportingStrategies = rankedStrategies
+      .filter((strategy) => strategy.id !== primary.id && strategy.count > 0)
+      .map((strategy) => `${strategy.label} (${strategy.count})`);
+
+    const lessonLabel = selectedLesson ? `Lesson ${selectedLesson}` : "this lesson";
+    const cohortLabel = `${primary.count} of ${results.length} student${results.length === 1 ? '' : 's'}`;
+
+    return {
+      ...representative.plan,
+      name: `${lessonLabel} Cohort Plan`,
+      strategy: primary.id,
+      relevance,
+      overallRecommendation: `Use ${primary.label.toLowerCase()} as the lead strategy for this cohort.`,
+      recommendationReason: supportingStrategies.length > 0
+        ? `${cohortLabel} aligned most closely with ${primary.label}. Secondary patterns also appeared in ${supportingStrategies.join(', ')}, so start whole-class instruction with ${primary.label} and differentiate as needed.`
+        : `${cohortLabel} aligned most closely with ${primary.label}, making it the clearest whole-class starting point from the submitted responses.`,
+      summary: `${primary.label} is the best starting point for the current cohort.`,
+      tldr: `Lead with ${primary.label.toLowerCase()} for this cohort.`,
+      rationale: supportingStrategies.length > 0
+        ? `Student-level analysis points to ${primary.label} as the dominant pattern across the submitted quiz responses. Launch whole-class content there first, then differentiate for students who may benefit from ${supportingStrategies.join(' or ')}.`
+        : `Student-level analysis points to ${primary.label} as the dominant pattern across the submitted quiz responses. Launch whole-class content there first, then monitor which students need a different scaffold.`,
+      cadence: representative.plan.cadence || 'Whole-class first, then differentiate',
+      tactics: representative.plan.tactics?.length > 0 ? representative.plan.tactics : [
+        `Start the class with a ${primary.label.toLowerCase()} prompt tied to ${lessonLabel}.`,
+        'Ask students to explain their thinking before revealing the next support.',
+        'Use the responses to decide which students need a follow-up scaffold.',
+      ],
+      checks: representative.plan.checks?.length > 0 ? representative.plan.checks : [
+        'Check whether students can explain why the new idea fits better than their first response.',
+      ],
+    };
+  };
+
+
+  // Load lessons list
+  useEffect(() => {
+    fetch("/api/lessons/1")
+      .then(() => {
+        // Load all 8 lessons metadata
+        const lessonList: Lesson[] = [];
+        const promises = Array.from({ length: 8 }, (_, i) =>
+          fetch(`/api/lessons/${i + 1}`)
+            .then((r) => r.json())
+            .then((data) => { lessonList[i] = data as Lesson; }),
+        );
+        Promise.all(promises).then(() => setLessons(lessonList.filter(Boolean)));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load quiz status on mount
+  useEffect(() => {
+    if (!classId || !assignmentId) return;
+    fetch(`/api/quiz-status?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.quizStatus) {
+          setSelectedLesson(data.quizStatus.lesson_number);
+          setQuizStatus(data.quizStatus.status);
+          // Load quiz items for this lesson
+          fetch(`/api/lessons/${data.quizStatus.lesson_number}`)
+            .then((r) => r.json())
+            .then((lesson) => setQuizItems(lesson.quiz_items ?? []));
+        }
+      })
+      .catch(() => {});
+  }, [classId, assignmentId]);
+
+
+  // Load draft from localStorage
+  useEffect(() => {
+    const scopedRaw = localStorage.getItem(draftStorageKey);
+    const legacyRaw = scopedRaw ? null : localStorage.getItem(LEGACY_DRAFT_STORAGE_KEY);
+    const raw = scopedRaw ?? legacyRaw;
+    let matchedDraft = false;
+    let shouldRestorePersistedMedia = false;
+
+    setSelectedLesson(null);
+    setPlan(null);
+    setSelectedStrategies([]);
+    setAnnotationDecision(null);
+    setAnnotationReason("");
+    setAnnotationStatus("idle");
+    setContent([]);
+    setImages({});
+    setVideos({});
+    setSelectedForPublish(new Set());
+    setPublishedContentIds(new Set());
+    setCurrentStep(1);
+
+    if (raw) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (isRecord(parsed) && parsed.version === DRAFT_VERSION && parsed.classId === classId && parsed.assignmentId === assignmentId) {
+          matchedDraft = true;
+          const draft = parsed as PersistedDraft;
+          const restoredContent = draft.content ?? [];
+          const contentIds = new Set(restoredContent.map((item) => item.id));
+          const restoredImages = Object.fromEntries(
+            Object.entries(draft.images ?? {}).filter(([itemId, state]) => contentIds.has(itemId) && (state.status === "ready" || state.status === "error")),
+          ) as Record<string, ImageState>;
+          const restoredVideos = Object.fromEntries(
+            Object.entries(draft.videos ?? {}).filter(
+              ([itemId, state]) =>
+                contentIds.has(itemId) &&
+                (state.status === "loading" || state.status === "polling" || state.status === "ready" || state.status === "error"),
+            ),
+          ) as Record<string, VideoState>;
+
+          setSelectedLesson(draft.lessonNumber);
+          setPlan(draft.plan);
+          setSelectedStrategies(draft.selectedStrategies ?? []);
+          setAnnotationDecision(draft.annotationDecision);
+          setAnnotationReason(draft.annotationReason ?? "");
+          setAnnotationStatus(draft.annotationStatus ?? "idle");
+          setContent(restoredContent);
+          setImages(restoredImages);
+          setVideos(restoredVideos);
+          setSelectedForPublish(new Set((draft.selectedForPublish ?? []).filter((itemId) => contentIds.has(itemId))));
+          setPublishedContentIds(new Set((draft.publishedContentIds ?? []).filter((itemId) => contentIds.has(itemId))));
+          setCurrentStep(clampStep(draft.currentStep));
+
+          shouldRestorePersistedMedia = restoredContent.length > 0 && Boolean(classId && assignmentId);
+
+          if (legacyRaw) {
+            localStorage.setItem(draftStorageKey, raw);
+          }
+        }
+      } catch {}
+    }
+
+    setIsRestoringDraftMedia(matchedDraft && shouldRestorePersistedMedia);
+    setIsHydrated(true);
+  }, [classId, assignmentId, draftStorageKey]);
+
+  // Persist draft
+  useEffect(() => {
+    if (!isHydrated) return;
+    const timeout = window.setTimeout(() => {
+      localStorage.setItem(draftStorageKey, JSON.stringify(buildDraftSnapshot()));
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [isHydrated, draftStorageKey, buildDraftSnapshot]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    const hasPendingVideos = Object.values(videos).some(
+      (state) => state.status === "loading" || state.status === "polling",
+    );
+    if (!hasPendingVideos) return;
+    localStorage.setItem(draftStorageKey, JSON.stringify(buildDraftSnapshot()));
+  }, [isHydrated, draftStorageKey, videos, buildDraftSnapshot]);
+
+  // Restore persisted Step 3 media/publish state before any regeneration kicks in.
+  useEffect(() => {
+    if (!isRestoringDraftMedia || !content.length || !classId || !assignmentId) return;
+
+    let cancelled = false;
+    const contentIds = new Set(content.map((item) => item.id));
+
+    const restorePersistedStep3State = async () => {
+      try {
+        const [mediaRes, publishRes] = await Promise.all([
+          fetch(`/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`),
+          fetch(`/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`),
+        ]);
+
+        if (cancelled) return;
+
+        if (mediaRes.ok) {
+          const mediaData = (await mediaRes.json()) as {
+            results?: Array<{
+              content_item_id?: string;
+              media_type?: "image" | "video";
+              data_url?: string;
+            }>;
+          };
+
+          const persistedImages: Record<string, ImageState> = {};
+          const persistedVideos: Record<string, VideoState> = {};
+
+          for (const record of mediaData.results ?? []) {
+            const itemId = record.content_item_id;
+            if (!itemId || !contentIds.has(itemId) || !record.data_url) continue;
+            if (record.media_type === "image") {
+              persistedImages[itemId] = { status: "ready", url: record.data_url };
+            }
+            if (record.media_type === "video") {
+              persistedVideos[itemId] = { status: "ready", url: record.data_url };
+            }
+          }
+
+          setImages((prev) => ({ ...prev, ...persistedImages }));
+          setVideos((prev) => ({ ...prev, ...persistedVideos }));
+        }
+
+        if (publishRes.ok) {
+          const publishData = (await publishRes.json()) as {
+            items?: Array<{ content_item_id?: string }>;
+          };
+          setPublishedContentIds(
+            new Set(
+              (publishData.items ?? [])
+                .map((item) => item.content_item_id)
+                .filter((itemId): itemId is string => typeof itemId === "string" && contentIds.has(itemId)),
+            ),
+          );
+        }
+
+        setSelectedForPublish((prev) => new Set(Array.from(prev).filter((itemId) => contentIds.has(itemId))));
+      } catch {
+        // Draft media restore is best-effort; missing persisted media should simply fall back to generation.
+      } finally {
+        if (!cancelled) {
+          setIsRestoringDraftMedia(false);
+        }
+      }
+    };
+
+    void restorePersistedStep3State();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRestoringDraftMedia, content, classId, assignmentId]);
+
+
+  // If there is no local draft for this assignment, fall back to previously published Step 3 content.
+  useEffect(() => {
+    if (!isHydrated || isRestoringDraftMedia || content.length > 0 || !classId || !assignmentId) return;
+
+    let cancelled = false;
+    setIsRestoringPublishedState(true);
+
+    const restorePublishedStep3State = async () => {
+      try {
+        const publishRes = await fetch(
+          `/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`,
+        );
+        if (!publishRes.ok) {
+          return;
+        }
+
+        const publishData = (await publishRes.json()) as {
+          items?: Array<{
+            content_item_id?: string;
+            content_json?: string;
+          }>;
+        };
+
+        if (cancelled) return;
+
+        const restoredContent = (publishData.items ?? [])
+          .map((item) => {
+            if (typeof item.content_json !== "string") return null;
+            try {
+              return parsePersistedContentItem(
+                JSON.parse(item.content_json),
+                item.content_item_id,
+              );
+            } catch {
+              return null;
+            }
+          })
+          .filter((item): item is ContentItem => Boolean(item))
+          .sort((left, right) => left.id.localeCompare(right.id));
+
+        if (restoredContent.length === 0) {
+          return;
+        }
+
+        const contentIds = new Set(restoredContent.map((item) => item.id));
+        const mediaRes = await fetch(
+          `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`,
+        );
+
+        if (cancelled) return;
+
+        const restoredImages: Record<string, ImageState> = {};
+        const restoredVideos: Record<string, VideoState> = {};
+
+        if (mediaRes.ok) {
+          const mediaData = (await mediaRes.json()) as {
+            results?: Array<{
+              content_item_id?: string;
+              media_type?: "image" | "video";
+              data_url?: string;
+            }>;
+          };
+
+          for (const record of mediaData.results ?? []) {
+            const itemId = record.content_item_id;
+            if (!itemId || !contentIds.has(itemId) || !record.data_url) continue;
+            if (record.media_type === "image") {
+              restoredImages[itemId] = { status: "ready", url: record.data_url };
+            }
+            if (record.media_type === "video") {
+              restoredVideos[itemId] = { status: "ready", url: record.data_url };
+            }
+          }
+        }
+
+        const restoredStrategies = Array.from(
+          new Set(
+            restoredContent
+              .map((item) => item.strategy)
+              .filter((strategy): strategy is string => typeof strategy === "string" && strategy.length > 0),
+          ),
+        );
+        const publishedIds = restoredContent.map((item) => item.id);
+
+        setContent(restoredContent);
+        setImages(restoredImages);
+        setVideos(restoredVideos);
+        setSelectedForPublish(new Set(publishedIds));
+        setPublishedContentIds(new Set(publishedIds));
+        setSelectedStrategies((prev) => (prev.length > 0 ? prev : restoredStrategies));
+        setCurrentStep(3);
+      } catch {
+        // Published restore is best-effort; keep the empty state if nothing can be recovered.
+      } finally {
+        if (!cancelled) {
+          setIsRestoringPublishedState(false);
+        }
+      }
+    };
+
+    void restorePublishedStep3State();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isHydrated, isRestoringDraftMedia, content.length, classId, assignmentId]);
+
+  const pollVideoUntilComplete = useCallback(
+    async (itemId: string, requestId: string) => {
+      if (!requestId || !classId || !assignmentId) return;
+      if (activeVideoPollersRef.current.has(itemId)) return;
+
+      activeVideoPollersRef.current.add(itemId);
+
+      try {
+        let result: { done: boolean; url?: string; error?: string } = { done: false };
+        let pollCount = 0;
+
+        while (!result.done && pollCount < 120) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          if (!isMountedRef.current) {
+            return;
+          }
+
+          pollCount++;
+          const params = new URLSearchParams({
+            requestId,
+            contentItemId: itemId,
+            classId,
+            assignmentId,
+            studentId: "cohort",
+          });
+          const res = await fetch(`/api/engagement-video/status?${params}`);
+          const data = (await res.json()) as {
+            done?: boolean;
+            url?: string;
+            error?: string;
+            transient?: boolean;
+          };
+
+          if (!res.ok) {
+            if (data.transient) {
+              continue;
+            }
+            result = {
+              done: true,
+              error: data.error ?? "Failed to check video status.",
+            };
+            break;
+          }
+
+          result = {
+            done: Boolean(data.done),
+            url: data.url,
+            error: data.error,
+          };
+        }
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        if (result.done && result.url) {
+          setVideos((prev) => ({ ...prev, [itemId]: { status: "ready", url: result.url } }));
+          return;
+        }
+
+        setVideos((prev) => ({
+          ...prev,
+          [itemId]: {
+            status: "error",
+            error: result.error ?? "Timed out.",
+          },
+        }));
+      } catch (err) {
+        if (!isMountedRef.current) {
+          return;
+        }
+        setVideos((prev) => ({
+          ...prev,
+          [itemId]: {
+            status: "error",
+            error: err instanceof Error ? err.message : "Video failed.",
+          },
+        }));
+      } finally {
+        activeVideoPollersRef.current.delete(itemId);
+      }
+    },
+    [assignmentId, classId],
+  );
+
+  useEffect(() => {
+    if (isRestoringStep3State || !content.length) return;
+
+    for (const item of content) {
+      const state = videos[item.id];
+      if (state?.status === "polling" && state.operationName) {
+        void pollVideoUntilComplete(item.id, state.operationName);
+      }
+    }
+  }, [content, videos, isRestoringStep3State, pollVideoUntilComplete]);
+
+  const selectLesson = async (lessonNumber: number) => {
+    setSelectedLesson(lessonNumber);
+    const res = await fetch(`/api/lessons/${lessonNumber}`);
+    const data = await res.json();
+    setQuizItems(data.quiz_items ?? []);
+    // Save as draft
+    if (classId && assignmentId) {
+      await fetch("/api/quiz-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classId, assignmentId, lessonNumber, status: "draft", publishedBy: user.userId }),
+      });
+      setQuizStatus("draft");
+    }
+  };
+
+  const publishQuiz = async () => {
+    setError(null);
+
+    if (!selectedLesson) {
+      setError("Select a lesson before publishing the quiz.");
+      return;
+    }
+
+    if (!classId || !assignmentId) {
+      setError(
+        "This preview is missing class or assignment context. Open the Engage Agent from a class assignment in GENIUS to publish to students.",
+      );
+      return;
+    }
+
+    setPublishingQuiz(true);
+    try {
+      const response = await fetch("/api/quiz-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classId, assignmentId, lessonNumber: selectedLesson, status: "published", publishedBy: user.userId }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          (data as { error?: string }).error ?? "Failed to publish quiz.",
+        );
+      }
+
+      setQuizStatus("published");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to publish quiz.",
+      );
+    } finally {
+      setPublishingQuiz(false);
+    }
+  };
+
+  const loadStudentAnswers = async (options?: { silent?: boolean }) => {
+    if (!classId || !assignmentId) return;
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoadingAnswers(true);
+    }
+    try {
+      const res = await fetch(`/api/student-answers?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`);
+      const data = await res.json();
+      setStudentAnswers(data.answers ?? []);
+    } catch {
+      setError("Failed to load student answers.");
+    } finally {
+      if (!silent) {
+        setLoadingAnswers(false);
+      }
+    }
+  };
+
+  // Refresh student answers when entering step 2, then poll while the quiz is live.
+  useEffect(() => {
+    if (currentStep !== 2 || quizStatus !== "published" || !classId || !assignmentId) {
+      return;
+    }
+
+    loadStudentAnswers();
+
+    const intervalId = window.setInterval(() => {
+      void loadStudentAnswers({ silent: true });
+    }, 10000);
+
+    return () => window.clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, quizStatus, classId, assignmentId]);
+
+  const requestCohortAnalysis = async () => {
+    if (!classId || !assignmentId) return;
+    if (studentAnswers.length === 0) {
+      setError("No student answers available. Wait for students to submit.");
+      return;
+    }
+
+    setLoadingCohort(true);
+    setError(null);
+    setPlan(null);
+    setSelectedStrategies([]);
+    setContent([]);
+    setImages({});
+    setVideos({});
+    setSelectedForPublish(new Set());
+    setCohortResults([]);
+    setCohortDistribution({});
+    setCohortProgress({ processed: 0, total: studentAnswers.length, currentName: "Loading cache..." });
+
+    try {
+      const studentsForApi = studentAnswers.map((sa) => ({
+        id: sa.student_id,
+        name: sa.student_name,
+        assignment: `Lesson ${selectedLesson}`,
+        answers: sa.answers,
+      }));
+
+      const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`;
+      const cacheRes = await fetch(cacheUrl);
+      let cacheData: { results?: Array<{ studentId?: string; plan?: unknown }> } = { results: [] };
+      if (cacheRes.ok) {
+        cacheData = await cacheRes.json();
+      }
+
+      const cachedMap = new Map<string, Plan>();
+      for (const entry of cacheData.results ?? []) {
+        if (entry.studentId && entry.plan) {
+          cachedMap.set(entry.studentId, entry.plan as Plan);
+        }
+      }
+
+      const results: StudentStrategyResult[] = [];
+      for (let index = 0; index < studentsForApi.length; index += 1) {
+        const student = studentsForApi[index];
+        const cached = cachedMap.get(student.id);
+
+        if (cached) {
+          results.push({ id: student.id, name: student.name, plan: cached });
+          setCohortProgress({
+            processed: index + 1,
+            total: studentsForApi.length,
+            currentName: `Loaded ${student.name} (cached)`,
+          });
+          setCohortResults([...results]);
+          continue;
+        }
+
+        setCohortProgress({
+          processed: index,
+          total: studentsForApi.length,
+          currentName: `Generating ${student.name}...`,
+        });
+        const res = await fetch("/api/strategy-single", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student, classId, assignmentId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? `Failed to analyze ${student.name}.`);
+        results.push({ id: student.id, name: student.name, plan: data.plan });
+        setCohortResults([...results]);
+      }
+
+      const distribution = buildCohortDistribution(results);
+      const masterPlan = buildCohortMasterPlan(results, distribution);
+
+      setCohortResults(results);
+      setCohortDistribution(distribution);
+      setCohortProgress({ processed: studentsForApi.length, total: studentsForApi.length, currentName: "" });
+
+      if (masterPlan) {
+        setPlan(masterPlan);
+        setSelectedStrategies([masterPlan.strategy]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error.");
+    } finally {
+      setLoadingCohort(false);
+    }
+  };
+
+  const requestContent = async () => {
+    if (!plan || selectedStrategies.length === 0) return;
+    setLoadingContent(true);
+    setError(null);
+    setContent([]);
+    try {
+      const res = await fetch("/api/engagement-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answers: {},
+          plan,
+          selectedStrategies,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as Record<string, string>)?.error ?? "Failed to generate content.");
+      }
+      const data = await res.json();
+      const items = (data.items ?? []).map(
+        (item: Omit<ContentItem, "id">, index: number) => ({
+          ...item,
+          id: `${item.strategy ?? "strategy"}-${index}-${item.title}`,
+        }),
+      );
+      setContent(items);
+      setImages({});
+      setVideos({});
+      setSelectedForPublish(new Set());
+      setCurrentStep(3);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error.");
+    } finally {
+      setLoadingContent(false);
+    }
+  };
+
+  const toggleStrategySelection = (strategyId: string) => {
+    setSelectedStrategies((prev) =>
+      prev.includes(strategyId) ? prev.filter((s) => s !== strategyId) : [...prev, strategyId],
+    );
+  };
+
+  const submitAnnotation = async () => {
+    if (!plan || !annotationDecision) {
+      setAnnotationError("Please choose agree or disagree.");
+      setAnnotationStatus("error");
+      return;
+    }
+    if (annotationDecision === "disagree" && !annotationReason.trim()) {
+      setAnnotationError("Please add the reason you disagree.");
+      setAnnotationStatus("error");
+      return;
+    }
+
+    setAnnotationStatus("saving");
+    setAnnotationError(null);
+    try {
+      const res = await fetch("/api/teacher-annotation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: null,
+          assignment: selectedLesson ? `Lesson ${selectedLesson}` : null,
+          overallRecommendation: plan.overallRecommendation,
+          recommendationReason: plan.recommendationReason,
+          decision: annotationDecision,
+          reason: annotationReason.trim() || null,
+          aiPlan: plan,
+          selectedStrategies,
+          answers: {},
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save annotation.");
+      setAnnotationStatus("saved");
+    } catch (err) {
+      setAnnotationError(err instanceof Error ? err.message : "Failed to save.");
+      setAnnotationStatus("error");
+    }
+  };
+
+  const toggleContentForPublish = (itemId: string) => {
+    setSelectedForPublish((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const publishSelectedContent = async () => {
+    if (selectedForPublish.size === 0 || !classId || !assignmentId) return;
+    setPublishingContent(true);
+    try {
+      const items = content.filter((c) => selectedForPublish.has(c.id));
+      const res = await fetch("/api/content-publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classId, assignmentId, contentItems: items, publishedBy: user.userId }),
+      });
+      if (!res.ok) throw new Error("Failed to publish content.");
+      setPublishedContentIds((prev) => {
+        const next = new Set(prev);
+        for (const id of selectedForPublish) next.add(id);
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to publish content.");
+    } finally {
+      setPublishingContent(false);
+    }
+  };
+
+  // Image generation effect
+  useEffect(() => {
+    if (isRestoringStep3State || !content.length) return;
+    const pending = content.filter((item) => !images[item.id]?.status);
+    if (pending.length === 0) return;
+
+    setImages((prev) => {
+      const next = { ...prev };
+      for (const item of pending) next[item.id] = { status: "loading" };
+      return next;
+    });
+
+    let cancelled = false;
+    (async () => {
+      for (const item of pending) {
+        if (cancelled) break;
+        try {
+          const res = await fetch("/api/engagement-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item, plan, answers: {}, classId, assignmentId, studentId: "cohort" }),
+          });
+          const text = await res.text();
+          let data: Record<string, unknown>;
+          try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+          if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
+          if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "ready", url: data.url as string } }));
+        } catch (err) {
+          if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: err instanceof Error ? err.message : "Image failed." } }));
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, isRestoringStep3State]);
+
+  const requestVideo = async (item: ContentItem) => {
+    const imageUrl = images[item.id]?.url;
+    if (!imageUrl) return;
+
+    setVideos((prev) => ({ ...prev, [item.id]: { status: "loading" } }));
+    try {
+      const startRes = await fetch("/api/engagement-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item, plan, answers: {}, imageUrl }),
+      });
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData?.error ?? "Failed to start video.");
+
+      const requestId = typeof startData?.requestId === "string" ? startData.requestId : "";
+      if (!requestId) {
+        throw new Error("Video request started but returned no request id.");
+      }
+
+      setVideos((prev) => ({ ...prev, [item.id]: { status: "polling", operationName: requestId } }));
+      void pollVideoUntilComplete(item.id, requestId);
+    } catch (err) {
+      setVideos((prev) => ({ ...prev, [item.id]: { status: "error", error: err instanceof Error ? err.message : "Video failed." } }));
+    }
+  };
+
+  const downloadFile = (url: string, filename: string) => {
+    const anchor = downloadRef.current;
+    if (!anchor) return;
+    if (url.startsWith("data:")) {
+      const [header, base64] = url.split(",");
+      const mime = header.match(/:(.*?);/)?.[1] ?? "application/octet-stream";
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } else {
+      anchor.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+      anchor.download = filename;
+      anchor.click();
+    }
+  };
+
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12">
+        <header className="flex flex-col gap-4">
+          <nav className="flex flex-wrap items-center gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Engage Agent</p>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase text-emerald-700">Teacher</span>
+          </nav>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Class context</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold text-slate-400">Teacher</p>
+                  <p className="text-sm font-semibold text-slate-800">{user.name}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold text-slate-400">Class ID</p>
+                  <p className="text-sm font-semibold text-slate-800">{classId || "—"}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold text-slate-400">Assignment ID</p>
+                  <p className="text-sm font-semibold text-slate-800">{assignmentId || "—"}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+              <Link href="/dashboard" className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
+                Assignment Dashboard
+              </Link>
+              <Link href="/community" className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
+                Community Gallery
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        <section className="grid gap-6">
+          {/* Step navigation */}
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Workflow steps</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Step-by-step flow</h2>
+              </div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {stepLabels.map((label, index) => {
+                  const stepNumber = index + 1;
+                  const isActive = currentStep === stepNumber;
+                  const isComplete = currentStep > stepNumber;
+                  return (
+                    <button key={label} type="button" onClick={() => setCurrentStep(stepNumber)}
+                      className={`flex flex-1 items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${isActive ? "border-[#BA0C2F] bg-[#BA0C2F] text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${isActive ? "bg-white text-[#BA0C2F]" : isComplete ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600"}`}>{stepNumber}</span>
+                      <span className="font-semibold">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+
+          {/* Step 1: Lesson & Quiz */}
+          {currentStep === 1 && (
+            <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Step 1</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Select lesson & publish quiz</h2>
+              </div>
+
+              {/* Lesson picker */}
+              <div className="grid gap-3">
+                <p className="text-xs font-semibold uppercase text-slate-400">Choose a lesson</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {lessons.map((lesson) => (
+                    <button key={lesson.lesson_number} type="button" onClick={() => selectLesson(lesson.lesson_number)}
+                      className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${selectedLesson === lesson.lesson_number ? "border-[#BA0C2F] bg-[#BA0C2F]/5 ring-2 ring-[#BA0C2F]" : "border-slate-200 hover:border-slate-300"}`}>
+                      <p className="font-semibold text-slate-800">{lesson.lesson_title}</p>
+                      <p className="mt-1 text-xs text-slate-500">{lesson.quiz_items.filter((q) => q.type === "multiple_choice").length} questions</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quiz preview */}
+              {selectedLesson && quizItems.length > 0 && (
+                <div className="grid gap-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase text-slate-400">Quiz preview ({quizItems.filter((q) => q.type === "multiple_choice").length} questions + confidence checks)</p>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${quizStatus === "published" ? "bg-emerald-100 text-emerald-700" : quizStatus === "closed" ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+                      {quizStatus}
+                    </span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    {quizItems.map((item) => (
+                      <div key={item.item_id} className={`mb-3 ${item.type === "confidence_check" ? "ml-6 text-slate-500 italic" : ""}`}>
+                        <p className="text-sm font-medium">{item.stem}</p>
+                        <div className="mt-1 grid gap-1">
+                          {Object.entries(item.options).map(([key, value]) => (
+                            <p key={key} className="text-xs text-slate-500">{key}. {value}</p>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {quizStatus === "draft" && (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={publishQuiz}
+                        disabled={publishingQuiz || !selectedLesson || !hasAssignmentContext}
+                        className="inline-flex items-center justify-center rounded-xl bg-[#BA0C2F] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#9a0a27] disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {publishingQuiz ? "Publishing..." : "Publish quiz to students"}
+                      </button>
+                      {!hasAssignmentContext && (
+                        <p className="text-sm text-amber-700">
+                          This preview is not linked to a class assignment yet. Open the Engage Agent from an assigned class in GENIUS to publish the quiz to students.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {quizStatus === "published" && (
+                    <p className="text-sm font-semibold text-emerald-600">Quiz is live. Students can now answer.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <button type="button" disabled className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-300">Previous step</button>
+                <button type="button" onClick={() => setCurrentStep(2)} className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100">Next step</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Strategy */}
+          {currentStep === 2 && (
+            <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Step 2</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Engagement strategy recommendation</h2>
+                <p className="text-sm text-slate-600">Based on student responses, generate strategies for the entire cohort.</p>
+              </div>
+
+              {/* Student answers summary */}
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase text-slate-400">Student responses</p>
+                  <button type="button" onClick={() => void loadStudentAnswers()} disabled={loadingAnswers}
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">
+                    {loadingAnswers ? "Loading..." : "Refresh"}
+                  </button>
+                </div>
+                <p className="mt-2 text-sm text-slate-700">
+                  <span className="font-semibold">{studentAnswers.length}</span> student{studentAnswers.length !== 1 ? "s" : ""} have answered so far.
+                </p>
+                {studentAnswers.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {studentAnswers.map((sa) => (
+                      <span key={sa.student_id} className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 border border-slate-200">
+                        {sa.student_name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Cohort analysis */}
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase text-slate-400">Cohort analysis</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowCohortHelp((prev) => !prev)}
+                        aria-label="Explain cohort analysis"
+                        aria-expanded={showCohortHelp}
+                        title="What does cohort analysis do?"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                      >
+                        ?
+                      </button>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-600">Generate strategies for all students who have answered.</p>
+                  </div>
+                  <button type="button" onClick={requestCohortAnalysis} disabled={loadingCohort || studentAnswers.length === 0}
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400">
+                    {loadingCohort ? "Analyzing cohort..." : `Analyze ${studentAnswers.length} students`}
+                  </button>
+                </div>
+
+                {showCohortHelp && (
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">
+                    Cohort analysis reviews each student’s submitted quiz answers, classifies the likely strategy for each student, and then aggregates those results into one cohort-wide master plan.
+                  </div>
+                )}
+
+                {loadingCohort && (
+                  <div className="mt-3 grid gap-2">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                      {cohortProgress.currentName || "Loading..."}
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-slate-700 transition-all" style={{ width: `${Math.round((cohortProgress.processed / Math.max(1, cohortProgress.total)) * 100)}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {cohortResults.length > 0 && !loadingCohort && (
+                  <div className="mt-4 grid gap-4">
+                    <div className="grid gap-3">
+                      <p className="text-xs font-semibold uppercase text-slate-400">Strategy distribution</p>
+                      {strategies.map((strategy) => {
+                        const count = cohortDistribution[strategy.id] ?? 0;
+                        const percent = Math.round((count / cohortResults.length) * 100);
+                        const isInfoOpen = openStrategyInfo.has(strategy.id);
+                        return (
+                          <div key={strategy.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                            <div className="flex items-start justify-between gap-3 text-sm">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleStrategyInfo(strategy.id)}
+                                    aria-label={`Explain ${strategy.label}`}
+                                    aria-expanded={isInfoOpen}
+                                    title={strategy.description}
+                                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                                  >
+                                    i
+                                  </button>
+                                  <span className="font-semibold text-slate-800">{strategy.label}</span>
+                                </div>
+                                {isInfoOpen && (
+                                  <p className="mt-2 text-xs leading-5 text-slate-500">{getStrategyDescription(strategy.id)}</p>
+                                )}
+                              </div>
+                              <span className="shrink-0 text-xs font-semibold text-slate-500">{count} students ({percent}%)</span>
+                            </div>
+                            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                              <div className={`h-full ${strategy.color}`} style={{ width: `${percent}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="grid gap-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase text-slate-400">Student recommendations</p>
+                        <button type="button" onClick={() => setShowStudentRecommendations((prev) => !prev)}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">
+                          {showStudentRecommendations ? "Hide" : "Show all"}
+                        </button>
+                      </div>
+                      {showStudentRecommendations && (
+                        <div className="grid gap-2">
+                          {cohortResults.map((result) => (
+                            <div key={result.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="font-semibold text-slate-800">{result.name}</span>
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{getStrategyLabel(result.plan.strategy)}</span>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">{result.plan.tldr}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Plan display (reuse existing plan UI) */}
+              {plan && (
+                <div className="mt-4 grid gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Master plan</p>
+                    <p className="text-base font-semibold text-slate-900">{plan.name}</p>
+                    <p className="text-sm font-medium text-slate-700">Strategy: {getStrategyLabel(plan.strategy)}</p>
+                    <p className="text-sm text-slate-600">{plan.summary}</p>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className={`rounded-2xl border border-slate-200 bg-white p-4 ${plan.strategy ? `ring-2 ${strategies.find((strategy) => strategy.id === plan.strategy)?.ring ?? ''}` : ''}`}>
+                      <p className="text-xs font-semibold uppercase text-slate-400">Recommended strategy</p>
+                      <div className="mt-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleStrategyInfo(plan.strategy)}
+                              aria-label={`Explain ${getStrategyLabel(plan.strategy)}`}
+                              aria-expanded={openStrategyInfo.has(plan.strategy)}
+                              title={getStrategyDescription(plan.strategy)}
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100"
+                            >
+                              i
+                            </button>
+                            <p className="text-base font-semibold text-slate-900">{getStrategyLabel(plan.strategy)}</p>
+                            <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">Primary</span>
+                          </div>
+                          {openStrategyInfo.has(plan.strategy) && (
+                            <p className="mt-2 text-xs leading-5 text-slate-500">{getStrategyDescription(plan.strategy)}</p>
+                          )}
+                          <p className="mt-2 text-sm text-slate-600">{plan.overallRecommendation}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Based on cohort analysis: {cohortDistribution[plan.strategy] ?? 0} of {cohortResults.length} student{cohortResults.length === 1 ? '' : 's'} aligned most closely with this strategy.
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedStrategies.includes(plan.strategy) ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {selectedStrategies.includes(plan.strategy) ? 'Selected for content' : 'Not selected'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-xs font-semibold uppercase text-slate-400">Content generation strategies</p>
+                      <p className="text-sm text-slate-600">The cohort recommendation is selected by default. Add alternate strategies only if you want broader generated materials.</p>
+                      <div className="flex flex-wrap gap-2">
+                        {strategies.map((strategy) => {
+                          const isSelected = selectedStrategies.includes(strategy.id);
+                          const isRecommended = plan.strategy === strategy.id;
+                          return (
+                            <button
+                              key={strategy.id}
+                              type="button"
+                              onClick={() => toggleStrategySelection(strategy.id)}
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${isSelected ? 'bg-slate-900 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                            >
+                              {strategy.label}
+                              {isRecommended ? ' · Recommended' : ''}
+                              {isSelected ? ' · Selected' : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Teacher annotation */}
+                  <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase text-slate-400">Teacher annotation</p>
+                    <p className="text-sm font-medium text-slate-700">
+                      Do you accept the recommended strategy: <span className="font-semibold text-slate-900">{getStrategyLabel(plan.strategy)}</span>?
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => setAnnotationDecision("agree")}
+                        className={`rounded-full px-4 py-2 text-xs font-semibold ${annotationDecision === "agree" ? "bg-emerald-600 text-white" : "border border-slate-200 text-slate-600"}`}>
+                        Accept
+                      </button>
+                      <button type="button" onClick={() => setAnnotationDecision("disagree")}
+                        className={`rounded-full px-4 py-2 text-xs font-semibold ${annotationDecision === "disagree" ? "bg-rose-600 text-white" : "border border-slate-200 text-slate-600"}`}>
+                        Disagree
+                      </button>
+                    </div>
+                    {annotationDecision === "disagree" && (
+                      <textarea className="min-h-[96px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+                        value={annotationReason} onChange={(e) => setAnnotationReason(e.target.value)}
+                        placeholder="Explain your reasoning..." required />
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button type="button" onClick={submitAnnotation} disabled={annotationStatus === "saving"}
+                        className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-400">
+                        {annotationStatus === "saving" ? "Saving..." : "Save annotation"}
+                      </button>
+                      {annotationStatus === "saved" && <span className="text-xs font-semibold text-emerald-600">Saved.</span>}
+                      {annotationStatus === "error" && annotationError && <span className="text-xs font-semibold text-rose-600">{annotationError}</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Generate content button */}
+              <button type="button" onClick={requestContent} disabled={!plan || loadingContent || !selectedStrategies.length}
+                className="mt-2 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">
+                {loadingContent ? "Generating..." : "Generate content"}
+              </button>
+
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={() => setCurrentStep(1)} className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100">Previous step</button>
+                <button type="button" onClick={() => setCurrentStep(3)} className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100">Next step</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Content generation */}
+          {currentStep === 3 && (
+            <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Step 3</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Engagement content</h2>
+                <p className="text-sm text-slate-600">Review generated content, select items to send to students for rating.</p>
+              </div>
+
+              {content.length === 0 && (
+                <p className="text-sm text-slate-400">No content generated yet. Go back to Step 2 and generate content.</p>
+              )}
+
+              {content.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-500">
+                      {selectedForPublish.size} of {content.length} selected for students
+                    </p>
+                    <button type="button" onClick={publishSelectedContent} disabled={selectedForPublish.size === 0 || publishingContent}
+                      className="rounded-xl bg-[#BA0C2F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#9a0a27] disabled:cursor-not-allowed disabled:bg-slate-300">
+                      {publishingContent ? "Sending..." : "Send to students"}
+                    </button>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {content.map((item) => {
+                      const isPublished = publishedContentIds.has(item.id);
+                      const isSelected = selectedForPublish.has(item.id);
+                      return (
+                        <div key={item.id} className={`flex flex-col gap-4 rounded-2xl border p-4 text-sm text-slate-700 sm:flex-row sm:items-stretch ${isPublished ? "border-emerald-200 bg-emerald-50/50" : "border-slate-100 bg-slate-50"}`}>
+                          {/* Media thumbnails */}
+                          <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+                            <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
+                              <div className="aspect-square w-full">
+                                {images[item.id]?.status === "loading" && (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                    <p className="text-xs text-slate-400">Generating...</p>
+                                  </div>
+                                )}
+                                {images[item.id]?.status === "ready" && images[item.id]?.url && (
+                                  <button type="button" className="block h-full w-full cursor-zoom-in overflow-hidden rounded-xl border border-slate-200 bg-white" onClick={() => setFocusImage({ url: images[item.id]?.url ?? "", title: item.title })}>
+                                    <img className="h-full w-full object-cover" src={images[item.id]?.url} alt={item.title} />
+                                  </button>
+                                )}
+                                {images[item.id]?.status === "error" && (
+                                  <div className="flex h-full w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100">
+                                    <p className="text-xs text-rose-500">{images[item.id]?.error}</p>
+                                  </div>
+                                )}
+                                {(!images[item.id]?.status || images[item.id]?.status === "idle") && (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                    <p className="text-xs text-slate-400">Preparing...</p>
+                                  </div>
+                                )}
+                              </div>
+                              <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => downloadFile(images[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`)}
+                                className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                Save image
+                              </button>
+                            </div>
+                            <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
+                              <div className="aspect-square w-full">
+                                {!videos[item.id]?.status && images[item.id]?.status === "ready" && (
+                                  <button type="button" onClick={() => requestVideo(item)} className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:bg-slate-100">
+                                    <span className="text-2xl">&#9654;</span>
+                                    <span className="text-xs font-semibold">Generate video</span>
+                                  </button>
+                                )}
+                                {(videos[item.id]?.status === "loading" || videos[item.id]?.status === "polling") && (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                                    <p className="text-xs text-slate-400">{videos[item.id]?.status === "polling" ? "Generating..." : "Starting..."}</p>
+                                  </div>
+                                )}
+                                {videos[item.id]?.status === "ready" && videos[item.id]?.url && (
+                                  <button type="button" className="block h-full w-full cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black" onClick={() => setFocusVideo({ url: videos[item.id]?.url ?? "", title: item.title })}>
+                                    <video className="h-full w-full object-cover" src={videos[item.id]?.url} muted playsInline loop autoPlay />
+                                  </button>
+                                )}
+                                {videos[item.id]?.status === "error" && (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100">
+                                    <p className="text-xs text-rose-500">{videos[item.id]?.error}</p>
+                                    <button type="button" onClick={() => requestVideo(item)} className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200">Retry</button>
+                                  </div>
+                                )}
+                              </div>
+                              <button type="button" disabled={videos[item.id]?.status !== "ready"} onClick={() => downloadFile(videos[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-video.mp4`)}
+                                className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                Save video
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Text content + select checkbox */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold uppercase text-slate-400">Strategy: {getStrategyLabel(item.strategy)}</p>
+                                <p className="text-xs font-semibold uppercase text-slate-400">{item.type}</p>
+                                <p className="text-base font-semibold text-slate-900">{item.title}</p>
+                              </div>
+                              {isPublished ? (
+                                <span className="shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Sent</span>
+                              ) : (
+                                <button type="button" onClick={() => toggleContentForPublish(item.id)}
+                                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${isSelected ? "bg-[#BA0C2F] text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+                                  {isSelected ? "Selected" : "Select"}
+                                </button>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm text-slate-600">{item.body}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={() => setCurrentStep(2)} className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100">Previous step</button>
+                <button type="button" disabled className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-300">Next step</button>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
+          )}
+        </section>
+
+        {/* Lightbox modals */}
+        {focusImage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" onClick={() => setFocusImage(null)}>
+            <div className="relative w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="absolute right-2 top-2 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow" onClick={() => setFocusImage(null)}>Close</button>
+              <img className="max-h-[80vh] w-full rounded-2xl bg-white object-contain shadow-2xl" src={focusImage.url} alt={focusImage.title} />
+              <p className="mt-3 text-center text-sm text-slate-100">{focusImage.title}</p>
+            </div>
+          </div>
+        )}
+
+        {focusVideo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" onClick={() => setFocusVideo(null)}>
+            <div className="relative w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="absolute right-2 top-2 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow" onClick={() => setFocusVideo(null)}>Close</button>
+              <video className="max-h-[80vh] w-full rounded-2xl bg-black shadow-2xl" src={focusVideo.url} controls autoPlay playsInline />
+              <p className="mt-3 text-center text-sm text-slate-100">{focusVideo.title}</p>
+            </div>
+          </div>
+        )}
+      </div>
+      <a ref={downloadRef} className="hidden" />
+    </div>
+  );
+}
