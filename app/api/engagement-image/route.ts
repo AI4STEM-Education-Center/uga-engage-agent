@@ -47,8 +47,12 @@ If the material includes dialogue, clearly show the speakers and what they are r
 If the material includes questions, show the scene students should reason about.
 If the material describes a phenomenon, make that phenomenon visually central.
 Style: clean, minimal, classroom-friendly.
-Hard requirement: the image must contain zero text of any kind.
-Do not render words, letters, numbers, equations, symbols, speech bubbles with text, captions, labels, posters, signs, UI text, or watermarks.`;
+When it helps understanding, add concise annotations directly on the image:
+- Use simple arrows to indicate direction of motion, forces, cause-and-effect, or relationships between objects.
+- Add short text labels (1-4 words max) next to key objects or arrows to name forces, objects, or concepts (e.g. "gravity", "friction", "push", "before", "after").
+- Keep labels in plain sans-serif font, high contrast against the background.
+- Do not add paragraphs, sentences, captions, watermarks, or decorative text. Only functional labels and arrows.
+If the scene is self-explanatory without annotations, omit them.`;
 };
 
 const MAX_REFINEMENT_PROMPT_LENGTH = 500;
@@ -125,7 +129,7 @@ export async function POST(request: Request) {
         model,
         prompt,
         size: "1024x1024",
-        quality: "low",
+        quality: "high",
         output_format: "webp",
       });
     }
