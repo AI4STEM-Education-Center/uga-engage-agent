@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { UserContext } from "@/lib/auth";
-import type { ContentItem } from "@/lib/types";
+import type { ContentItem, TextMode } from "@/lib/types";
 
 type Props = {
   user: UserContext;
@@ -14,6 +14,20 @@ type PublishedItem = {
 };
 
 const RATING_LABELS = ["", "Not engaging", "Slightly engaging", "Moderately engaging", "Very engaging", "Extremely engaging"];
+
+const TEXT_MODE_LABELS: Record<TextMode, string> = {
+  questions: "Questions",
+  phenomenon: "Phenomenon",
+  dialogue: "Dialogue",
+};
+
+const getContentModeLabels = (item: ContentItem) => {
+  if (item.textModes && item.textModes.length > 0) {
+    return item.textModes.map((mode) => TEXT_MODE_LABELS[mode] ?? mode);
+  }
+
+  return item.type ? [item.type] : [];
+};
 
 export default function StudentContentRatingView({ user }: Props) {
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
@@ -216,13 +230,20 @@ export default function StudentContentRatingView({ user }: Props) {
 
               {/* Text */}
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase text-slate-400">
-                  {item.type}
-                </p>
-                <p className="text-base font-semibold text-slate-900">
+                <div className="flex flex-wrap gap-2">
+                  {getContentModeLabels(item).map((label) => (
+                    <span
+                      key={`${item.id}-${label}`}
+                      className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-3 text-base font-semibold text-slate-900">
                   {item.title}
                 </p>
-                <p className="mt-2 text-sm text-slate-600">{item.body}</p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{item.body}</p>
               </div>
             </div>
 

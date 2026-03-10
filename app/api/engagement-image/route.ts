@@ -18,6 +18,8 @@ type ContentItem = {
   type: string;
   title: string;
   body: string;
+  textModes?: string[];
+  visualBrief?: string;
 };
 
 const buildPrompt = (
@@ -28,14 +30,22 @@ const buildPrompt = (
   const topic = answers.topic?.trim() || "gravity";
   const gradeLevel = "8th grade";
   const planName = plan?.name ?? "Engagement plan";
+  const textModes = item.textModes?.length ? item.textModes.join(", ") : item.type;
+  const visualBrief = item.visualBrief?.trim();
 
   return `Create a simple, student-friendly illustration for an ${gradeLevel} physics lesson.
+This image will be shown directly to students next to the material below.
 Topic: ${topic}
-Content type: ${item.type}
+Strategy inspiration: ${planName}
+Text style: ${textModes}
 Title: ${item.title}
-Plan: ${planName}
-Description: ${item.body}
+Student-facing text:
+${item.body}
+${visualBrief ? `Visual brief: ${visualBrief}` : "Visual brief: Show the main scene, phenomenon, or conversation implied by the text."}
 
+If the material includes dialogue, clearly show the speakers and what they are reacting to.
+If the material includes questions, show the scene students should reason about.
+If the material describes a phenomenon, make that phenomenon visually central.
 Style: clean, minimal, classroom-friendly.
 Hard requirement: no text anywhere in the image.
 Do not render words, letters, numbers, symbols, labels, captions, signs, or watermarks.`;

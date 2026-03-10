@@ -6,16 +6,19 @@ type ContentItem = {
   subject?: string;
   title: string;
   body: string;
+  textModes?: string[];
+  visualBrief?: string;
 };
 
 const XAI_VIDEO_BASE = "https://api.x.ai/v1/videos";
 
 function buildAnimationPrompt(): string {
-  return `Animate this still image with natural motion only.
+  return `Animate this student-facing still image with natural motion only.
 Keep the same scene, style, and subjects.
 
-Focus on subtle movement (camera drift, object motion, lighting/parallax), cinematic and smooth.
+Focus on subtle movement (camera drift, object motion, gestures, lighting/parallax), cinematic and smooth.
 Continue the scene as it would unfold in the real world, with physically plausible actions and timing.
+If people are present, allow subtle expressions or turn-taking that fit the scene.
 Show a complete micro-sequence with a clear beginning, middle, and natural ending within the clip.
 Hard requirement: no text anywhere in the video.
 Do not add words, letters, numbers, symbols, subtitles, captions, logos, signs, labels, or watermarks.

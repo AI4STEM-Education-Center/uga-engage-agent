@@ -14,12 +14,16 @@ export type Plan = {
   checks: string[];
 };
 
+export type TextMode = "questions" | "phenomenon" | "dialogue";
+
 export type ContentItem = {
   id: string;
   type: string;
   title: string;
   body: string;
   strategy: string;
+  textModes?: TextMode[];
+  visualBrief?: string;
 };
 
 export type ImageState = {

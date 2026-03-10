@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import type { ContentItem, TextMode } from "@/lib/types";
 
 type Answers = Record<string, string | undefined>;
 
@@ -17,21 +18,63 @@ type Plan = {
   checks: string[];
 };
 
+type GeneratedContentItem = Pick<
+  ContentItem,
+  "type" | "title" | "body" | "textModes" | "visualBrief"
+>;
+
+const ALLOWED_TEXT_MODES = [
+  "questions",
+  "phenomenon",
+  "dialogue",
+] as const satisfies readonly TextMode[];
+
+const isTextMode = (value: string): value is TextMode =>
+  (ALLOWED_TEXT_MODES as readonly string[]).includes(value);
+
+const normalizeTextModes = (value: unknown): TextMode[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((mode): mode is string => typeof mode === "string")
+    .map((mode) => mode.trim().toLowerCase())
+    .filter(isTextMode);
+};
+
 const buildPrompt = (answers: Answers, plan: Plan, strategy: string) => ({
-  system: `You are an education engagement content designer.
-Return JSON only with key: items (array). Each item has type, title, body.`,
+  system: `You are an education content designer creating short, student-facing science materials.
+Return JSON only with key: items (array).
+Return exactly 1 item in the array.
+Each item must include:
+- type: a short label such as "Questions", "Phenomenon", "Dialogue", or a short combination label
+- title: a concise, student-facing title
+- body: the exact text students will read directly
+- textModes: an array using only "questions", "phenomenon", and/or "dialogue"
+- visualBrief: one short sentence describing what the illustration should show
+Do not include teacher directions, facilitation notes, or implementation instructions.`,
   user: `Student profile:
 ${JSON.stringify(answers, null, 2)}
 
 Engagement plan:
 ${JSON.stringify(plan, null, 2)}
 
-Generate 3 content items:
-- Warm-up (short hook)
-- Mini lesson (core idea)
-- Practice (quick application)
-Align the content to the strategy: ${strategy}.
-Keep each body 1-3 sentences.`,
+Create exactly 1 student-facing content item aligned to the strategy: ${strategy}.
+The text can use one or a combination of:
+(a) questions,
+(b) a short description of a phenomenon, or
+(c) a dialogue between two virtual students or between a teacher and a student.
+
+Requirements:
+- This will be shared directly with students, so write to students instead of to teachers.
+- Avoid phrases such as "ask students", "have students", "teacher note", or lesson-delivery instructions.
+- Keep it concrete, vivid, and age-appropriate for middle-school physics learners.
+- The image must clearly reflect the scene or interaction described in the text.
+- Keep the body concise, around 70-140 words, with line breaks if helpful.
+- Do not mention the engagement strategy by name to students.
+
+Return exactly 1 item in items.`,
 });
 
 const parseJson = (value: string | null | undefined) => {
@@ -39,7 +82,7 @@ const parseJson = (value: string | null | undefined) => {
     throw new Error("LLM returned empty response.");
   }
   return JSON.parse(value) as {
-    items: Array<{ type: string; title: string; body: string }>;
+    items: GeneratedContentItem[];
   };
 };
 
@@ -67,12 +110,7 @@ export async function POST(request: Request) {
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
     const strategies =
       selectedStrategies.length > 0 ? selectedStrategies : [plan.strategy];
-    const items: Array<{
-      type: string;
-      title: string;
-      body: string;
-      strategy: string;
-    }> = [];
+    const items: ContentItem[] = [];
 
     const strategyResults = await Promise.all(
       strategies.map(async (strategy) => {
@@ -87,10 +125,24 @@ export async function POST(request: Request) {
         });
 
         const data = parseJson(completion.choices[0]?.message?.content);
-        return (data.items ?? []).map((item) => ({
-          ...item,
-          strategy,
-        }));
+        return (data.items ?? []).slice(0, 1).map((item) => {
+          const textModes = normalizeTextModes(item.textModes);
+          const title = item.title?.trim() || `${strategy} activity`;
+          const body = item.body?.trim();
+
+          if (!body) {
+            throw new Error("Generated content body was empty.");
+          }
+
+          return {
+            type: item.type?.trim() || (textModes.length > 0 ? textModes.join(" + ") : "Student material"),
+            title,
+            body,
+            strategy,
+            ...(textModes.length > 0 ? { textModes } : {}),
+            ...(item.visualBrief?.trim() ? { visualBrief: item.visualBrief.trim() } : {}),
+          } satisfies ContentItem;
+        });
       }),
     );
 

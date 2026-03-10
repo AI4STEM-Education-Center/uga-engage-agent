@@ -17,6 +17,7 @@ import type {
   Lesson,
   QuizItem,
   StudentAnswer,
+  TextMode,
 } from "@/lib/types";
 
 type Props = {
@@ -54,6 +55,77 @@ const getDraftStorageKey = (classId: string, assignmentId: string) =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isQuotaExceededError = (error: unknown) =>
+  error instanceof DOMException &&
+  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED");
+
+const trimPersistedImageState = (state: ImageState): ImageState | null => {
+  if (state.status === "error") {
+    return { status: "error", error: state.error };
+  }
+
+  if (state.status === "ready" && state.url && !state.url.startsWith("data:")) {
+    return { status: "ready", url: state.url };
+  }
+
+  return null;
+};
+
+const trimPersistedVideoState = (state: VideoState): VideoState | null => {
+  if (state.status === "loading") {
+    return { status: "loading" };
+  }
+
+  if (state.status === "polling") {
+    return { status: "polling", operationName: state.operationName };
+  }
+
+  if (state.status === "error") {
+    return { status: "error", error: state.error };
+  }
+
+  if (state.status === "ready" && state.url && !state.url.startsWith("data:")) {
+    return { status: "ready", url: state.url };
+  }
+
+  return null;
+};
+
+const clearOtherDraftStorage = (keepKey: string) => {
+  const keysToRemove: string[] = [];
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key) continue;
+    if (key === LEGACY_DRAFT_STORAGE_KEY) {
+      keysToRemove.push(key);
+      continue;
+    }
+    if (key.startsWith(`${DRAFT_STORAGE_PREFIX}:`) && key !== keepKey) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+};
+
+const CONTENT_TEXT_MODE_LABELS: Record<TextMode, string> = {
+  questions: "Questions",
+  phenomenon: "Phenomenon",
+  dialogue: "Dialogue",
+};
+
+const isTextModeValue = (value: string): value is TextMode =>
+  value === "questions" || value === "phenomenon" || value === "dialogue";
+
+const getContentModeLabels = (item: ContentItem) => {
+  if (item.textModes && item.textModes.length > 0) {
+    return item.textModes.map((mode) => CONTENT_TEXT_MODE_LABELS[mode] ?? mode);
+  }
+
+  return item.type ? [item.type] : [];
+};
+
 const parsePersistedContentItem = (
   value: unknown,
   fallbackId?: string,
@@ -65,6 +137,13 @@ const parsePersistedContentItem = (
   const title = typeof value.title === "string" ? value.title : "";
   const body = typeof value.body === "string" ? value.body : "";
   const strategy = typeof value.strategy === "string" ? value.strategy : "";
+  const textModes = Array.isArray(value.textModes)
+    ? value.textModes
+        .filter((mode): mode is string => typeof mode === "string")
+        .map((mode) => mode.trim().toLowerCase())
+        .filter(isTextModeValue)
+    : [];
+  const visualBrief = typeof value.visualBrief === "string" ? value.visualBrief : undefined;
 
   if (!id || !title || !body) return null;
 
@@ -74,6 +153,8 @@ const parsePersistedContentItem = (
     title,
     body,
     strategy,
+    ...(textModes.length > 0 ? { textModes } : {}),
+    ...(visualBrief ? { visualBrief } : {}),
   };
 };
 
@@ -158,11 +239,15 @@ export default function TeacherView({ user }: Props) {
   const buildDraftSnapshot = useCallback(
     (nextVideos?: Record<string, VideoState>): PersistedDraft => {
       const serializableImages = Object.fromEntries(
-        Object.entries(images).filter(([, state]) => state.status === "ready" || state.status === "error"),
-      ) as Record<string, ImageState>;
+        Object.entries(images)
+          .map(([itemId, state]) => [itemId, trimPersistedImageState(state)] as const)
+          .filter((entry): entry is [string, ImageState] => Boolean(entry[1])),
+      );
       const serializableVideos = Object.fromEntries(
-        Object.entries(nextVideos ?? videos).filter(([, state]) => state.status !== "idle"),
-      ) as Record<string, VideoState>;
+        Object.entries(nextVideos ?? videos)
+          .map(([itemId, state]) => [itemId, trimPersistedVideoState(state)] as const)
+          .filter((entry): entry is [string, VideoState] => Boolean(entry[1])),
+      );
 
       return {
         version: DRAFT_VERSION,
@@ -198,6 +283,48 @@ export default function TeacherView({ user }: Props) {
       selectedForPublish,
       publishedContentIds,
     ],
+  );
+
+  const persistDraftSnapshot = useCallback(
+    (snapshot: PersistedDraft) => {
+      const serialized = JSON.stringify(snapshot);
+
+      try {
+        localStorage.setItem(draftStorageKey, serialized);
+        localStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
+        return;
+      } catch (error) {
+        if (!isQuotaExceededError(error)) {
+          console.warn("Failed to persist Engage Agent draft.", error);
+          return;
+        }
+      }
+
+      try {
+        clearOtherDraftStorage(draftStorageKey);
+        localStorage.setItem(draftStorageKey, serialized);
+        localStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
+        return;
+      } catch (error) {
+        if (!isQuotaExceededError(error)) {
+          console.warn("Failed to persist Engage Agent draft after pruning old drafts.", error);
+          return;
+        }
+      }
+
+      try {
+        const minimalSnapshot: PersistedDraft = {
+          ...snapshot,
+          images: {},
+          videos: {},
+        };
+        localStorage.setItem(draftStorageKey, JSON.stringify(minimalSnapshot));
+        localStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
+      } catch (error) {
+        console.warn("Failed to persist Engage Agent draft after trimming media state.", error);
+      }
+    },
+    [draftStorageKey],
   );
 
   const toggleStrategyInfo = (strategyId: string) => {
@@ -358,13 +485,25 @@ export default function TeacherView({ user }: Props) {
           const restoredContent = draft.content ?? [];
           const contentIds = new Set(restoredContent.map((item) => item.id));
           const restoredImages = Object.fromEntries(
-            Object.entries(draft.images ?? {}).filter(([itemId, state]) => contentIds.has(itemId) && (state.status === "ready" || state.status === "error")),
+            Object.entries(draft.images ?? {}).filter(
+              ([itemId, state]) =>
+                contentIds.has(itemId) &&
+                (
+                  state.status === "error" ||
+                  (state.status === "ready" && Boolean(state.url))
+                ),
+            ),
           ) as Record<string, ImageState>;
           const restoredVideos = Object.fromEntries(
             Object.entries(draft.videos ?? {}).filter(
               ([itemId, state]) =>
                 contentIds.has(itemId) &&
-                (state.status === "loading" || state.status === "polling" || state.status === "ready" || state.status === "error"),
+                (
+                  state.status === "loading" ||
+                  state.status === "polling" ||
+                  state.status === "error" ||
+                  (state.status === "ready" && Boolean(state.url))
+                ),
             ),
           ) as Record<string, VideoState>;
 
@@ -384,7 +523,7 @@ export default function TeacherView({ user }: Props) {
           shouldRestorePersistedMedia = restoredContent.length > 0 && Boolean(classId && assignmentId);
 
           if (legacyRaw) {
-            localStorage.setItem(draftStorageKey, raw);
+            persistDraftSnapshot(draft);
           }
         }
       } catch {}
@@ -392,16 +531,16 @@ export default function TeacherView({ user }: Props) {
 
     setIsRestoringDraftMedia(matchedDraft && shouldRestorePersistedMedia);
     setIsHydrated(true);
-  }, [classId, assignmentId, draftStorageKey]);
+  }, [classId, assignmentId, draftStorageKey, persistDraftSnapshot]);
 
   // Persist draft
   useEffect(() => {
     if (!isHydrated) return;
     const timeout = window.setTimeout(() => {
-      localStorage.setItem(draftStorageKey, JSON.stringify(buildDraftSnapshot()));
+      persistDraftSnapshot(buildDraftSnapshot());
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [isHydrated, draftStorageKey, buildDraftSnapshot]);
+  }, [isHydrated, buildDraftSnapshot, persistDraftSnapshot]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -409,8 +548,8 @@ export default function TeacherView({ user }: Props) {
       (state) => state.status === "loading" || state.status === "polling",
     );
     if (!hasPendingVideos) return;
-    localStorage.setItem(draftStorageKey, JSON.stringify(buildDraftSnapshot()));
-  }, [isHydrated, draftStorageKey, videos, buildDraftSnapshot]);
+    persistDraftSnapshot(buildDraftSnapshot());
+  }, [isHydrated, videos, buildDraftSnapshot, persistDraftSnapshot]);
 
   // Restore persisted Step 3 media/publish state before any regeneration kicks in.
   useEffect(() => {
@@ -1394,7 +1533,7 @@ export default function TeacherView({ user }: Props) {
 
                     <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4">
                       <p className="text-xs font-semibold uppercase text-slate-400">Content generation strategies</p>
-                      <p className="text-sm text-slate-600">The cohort recommendation is selected by default. Add alternate strategies only if you want broader generated materials.</p>
+                      <p className="text-sm text-slate-600">The cohort recommendation is selected by default. Each selected strategy generates one student-facing material, so add alternates only if you want more than one item to review.</p>
                       <div className="flex flex-wrap gap-2">
                         {strategies.map((strategy) => {
                           const isSelected = selectedStrategies.includes(strategy.id);
@@ -1468,7 +1607,7 @@ export default function TeacherView({ user }: Props) {
               <div className="flex flex-col gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Step 3</p>
                 <h2 className="text-2xl font-semibold text-slate-900">Engagement content</h2>
-                <p className="text-sm text-slate-600">Review generated content, select items to send to students for rating.</p>
+                <p className="text-sm text-slate-600">Generate one student-facing material per selected strategy, then choose which items to send to students for rating.</p>
               </div>
 
               {content.length === 0 && (
@@ -1563,8 +1702,14 @@ export default function TeacherView({ user }: Props) {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-[11px] font-semibold uppercase text-slate-400">Strategy: {getStrategyLabel(item.strategy)}</p>
-                                <p className="text-xs font-semibold uppercase text-slate-400">{item.type}</p>
-                                <p className="text-base font-semibold text-slate-900">{item.title}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {getContentModeLabels(item).map((label) => (
+                                    <span key={`${item.id}-${label}`} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                      {label}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="mt-2 text-base font-semibold text-slate-900">{item.title}</p>
                               </div>
                               {isPublished ? (
                                 <span className="shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Sent</span>
@@ -1575,7 +1720,7 @@ export default function TeacherView({ user }: Props) {
                                 </button>
                               )}
                             </div>
-                            <p className="mt-2 text-sm text-slate-600">{item.body}</p>
+                            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{item.body}</p>
                           </div>
                         </div>
                       );
