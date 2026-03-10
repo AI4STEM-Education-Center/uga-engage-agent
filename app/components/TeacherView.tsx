@@ -340,6 +340,11 @@ export default function TeacherView({ user }: Props) {
   const [focusImage, setFocusImage] = useState<{ url: string; title: string } | null>(null);
   const [focusVideo, setFocusVideo] = useState<{ url: string; title: string } | null>(null);
 
+  // Refine modal
+  const [refineTarget, setRefineTarget] = useState<{ itemId: string; title: string } | null>(null);
+  const [refinePrompt, setRefinePrompt] = useState("");
+  const [refineLoading, setRefineLoading] = useState(false);
+
   // Content publishing
   const [selectedForPublish, setSelectedForPublish] = useState<Set<string>>(new Set());
   const [publishingContent, setPublishingContent] = useState(false);
@@ -1668,6 +1673,46 @@ export default function TeacherView({ user }: Props) {
     }
   };
 
+  const [refineError, setRefineError] = useState<string | null>(null);
+
+  const handleRefine = async () => {
+    if (!refineTarget || !refinePrompt.trim()) return;
+    const item = content.find((c) => c.id === refineTarget.itemId);
+    if (!item) return;
+
+    const currentImageUrl = images[refineTarget.itemId]?.url;
+    setRefineLoading(true);
+    setRefineError(null);
+
+    try {
+      const res = await fetch("/api/engagement-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item,
+          plan,
+          answers: {},
+          classId,
+          assignmentId,
+          studentId: "cohort",
+          refinementPrompt: refinePrompt.trim(),
+          previousImageUrl: currentImageUrl,
+        }),
+      });
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+      if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
+      setImages((prev) => ({ ...prev, [refineTarget.itemId]: { status: "ready", url: data.url as string } }));
+      setRefinePrompt("");
+    } catch (err) {
+      // Keep the current image intact — just show the error in the modal
+      setRefineError(err instanceof Error ? err.message : "Refine failed.");
+    } finally {
+      setRefineLoading(false);
+    }
+  };
+
 
   const selectedLessonData =
     lessons.find((lesson) => lesson.lesson_number === selectedLesson) ?? null;
@@ -2145,10 +2190,16 @@ export default function TeacherView({ user }: Props) {
                                   </div>
                                 )}
                               </div>
-                              <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => downloadFile(images[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`)}
-                                className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
-                                Save image
-                              </button>
+                              <div className="flex w-full gap-1.5">
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => downloadFile(images[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`)}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Save
+                                </button>
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); }}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Refine
+                                </button>
+                              </div>
                             </div>
                             <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
                               <div className="aspect-square w-full">
@@ -2176,10 +2227,16 @@ export default function TeacherView({ user }: Props) {
                                   </div>
                                 )}
                               </div>
-                              <button type="button" disabled={videos[item.id]?.status !== "ready"} onClick={() => downloadFile(videos[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-video.mp4`)}
-                                className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
-                                Save video
-                              </button>
+                              <div className="flex w-full gap-1.5">
+                                <button type="button" disabled={videos[item.id]?.status !== "ready"} onClick={() => downloadFile(videos[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-video.mp4`)}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Save
+                                </button>
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); }}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Refine
+                                </button>
+                              </div>
                             </div>
                           </div>
 
@@ -2244,6 +2301,62 @@ export default function TeacherView({ user }: Props) {
               <button type="button" className="absolute right-2 top-2 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow" onClick={() => setFocusVideo(null)}>Close</button>
               <video className="max-h-[80vh] w-full rounded-2xl bg-black shadow-2xl" src={focusVideo.url} controls autoPlay playsInline />
               <p className="mt-3 text-center text-sm text-slate-100">{focusVideo.title}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Refine image modal */}
+        {refineTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" onClick={() => { if (!refineLoading) setRefineTarget(null); }}>
+            <div className="relative flex w-full max-w-2xl flex-col gap-4 rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">Refine Image</h3>
+                <button type="button" disabled={refineLoading} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-300" onClick={() => setRefineTarget(null)}>Close</button>
+              </div>
+              <p className="text-sm text-slate-500">{refineTarget.title}</p>
+
+              {/* Image preview */}
+              <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+                {images[refineTarget.itemId]?.status === "ready" && images[refineTarget.itemId]?.url && (
+                  <img className="max-h-[40vh] w-full rounded-xl object-contain" src={images[refineTarget.itemId]?.url} alt={refineTarget.title} />
+                )}
+                {images[refineTarget.itemId]?.status === "loading" && (
+                  <div className="flex flex-col items-center gap-2 py-16">
+                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                    <p className="text-sm text-slate-400">Generating refined image...</p>
+                  </div>
+                )}
+                {images[refineTarget.itemId]?.status === "error" && (
+                  <p className="py-16 text-sm text-rose-500">{images[refineTarget.itemId]?.error}</p>
+                )}
+              </div>
+
+              {/* Refinement input */}
+              {refineError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{refineError}</div>
+              )}
+              <div className="relative">
+                <textarea
+                  value={refinePrompt}
+                  onChange={(e) => { setRefinePrompt(e.target.value.slice(0, 500)); setRefineError(null); }}
+                  placeholder="Describe how you'd like to modify this image..."
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                />
+                <span className="absolute bottom-2 right-3 text-[10px] text-slate-400">{refinePrompt.length}/500</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3">
+                <button type="button" disabled={refineLoading} onClick={() => setRefineTarget(null)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                  Cancel
+                </button>
+                <button type="button" disabled={refineLoading || !refinePrompt.trim()} onClick={handleRefine}
+                  className="rounded-full bg-[#BA0C2F] px-5 py-2 text-xs font-semibold text-white transition hover:bg-[#9a0a27] disabled:cursor-not-allowed disabled:bg-slate-400">
+                  {refineLoading ? "Regenerating..." : "Regenerate"}
+                </button>
+              </div>
             </div>
           </div>
         )}
