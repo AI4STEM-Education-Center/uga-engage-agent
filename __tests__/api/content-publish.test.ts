@@ -3,6 +3,7 @@ import { GET, POST } from "@/app/api/content-publish/route";
 
 vi.mock("@/lib/nosql", () => {
   let items: Array<Record<string, unknown>> = [];
+  let media: Array<Record<string, unknown>> = [];
   return {
     upsertContentPublish: vi.fn(async (input: Record<string, unknown>) => {
       const idx = items.findIndex(
@@ -15,11 +16,28 @@ vi.mock("@/lib/nosql", () => {
     listPublishedContent: vi.fn(async (classId: string, assignmentId: string) => {
       return items.filter((c) => c.class_id === classId && c.assignment_id === assignmentId && c.published);
     }),
-    __resetStore: () => { items = []; },
+    listMedia: vi.fn(async (classId: string, assignmentId: string, studentId: string) => {
+      return media.filter(
+        (entry) =>
+          entry.class_id === classId &&
+          entry.assignment_id === assignmentId &&
+          entry.student_id === studentId,
+      );
+    }),
+    __resetStore: () => {
+      items = [];
+      media = [];
+    },
+    __setMedia: (nextMedia: Array<Record<string, unknown>>) => {
+      media = nextMedia;
+    },
   };
 });
 
-const { __resetStore } = await import("@/lib/nosql") as unknown as { __resetStore: () => void };
+const { __resetStore, __setMedia } = await import("@/lib/nosql") as unknown as {
+  __resetStore: () => void;
+  __setMedia: (nextMedia: Array<Record<string, unknown>>) => void;
+};
 
 beforeEach(() => {
   __resetStore();
@@ -85,6 +103,47 @@ describe("GET /api/content-publish", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.items).toHaveLength(1);
+  });
+
+  it("should include any available image and video with published items", async () => {
+    await POST(new Request("http://localhost:3000/api/content-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        classId: "c1",
+        assignmentId: "a1",
+        publishedBy: "teacher-1",
+        contentItems: [{ id: "item-1", type: "material", title: "Test", body: "Body", strategy: "analogy" }],
+      }),
+    }));
+
+    __setMedia([
+      {
+        class_id: "c1",
+        assignment_id: "a1",
+        student_id: "cohort",
+        content_item_id: "item-1",
+        media_type: "image",
+        data_url: "https://example.com/image.webp",
+      },
+      {
+        class_id: "c1",
+        assignment_id: "a1",
+        student_id: "cohort",
+        content_item_id: "item-1",
+        media_type: "video",
+        data_url: "https://example.com/video.mp4",
+      },
+    ]);
+
+    const req = new Request("http://localhost:3000/api/content-publish?classId=c1&assignmentId=a1");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.items[0].media).toEqual({
+      image: "https://example.com/image.webp",
+      video: "https://example.com/video.mp4",
+    });
   });
 
   it("should return empty when nothing published", async () => {

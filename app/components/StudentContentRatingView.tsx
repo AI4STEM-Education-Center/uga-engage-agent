@@ -11,6 +11,10 @@ type Props = {
 type PublishedItem = {
   content_item_id: string;
   content_json: string;
+  media?: {
+    image?: string;
+    video?: string;
+  };
 };
 
 const RATING_LABELS = ["", "Not engaging", "Slightly engaging", "Moderately engaging", "Very engaging", "Extremely engaging"];
@@ -70,25 +74,18 @@ export default function StudentContentRatingView({ user }: Props) {
       });
       setContentItems(parsed);
 
-      // Fetch media for published content
-      const mediaRes = await fetch(
-        `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`,
-      );
-      if (mediaRes.ok) {
-        const mediaData = await mediaRes.json();
-        const mediaMap: Record<string, { image?: string; video?: string }> = {};
-        for (const rec of mediaData.results ?? []) {
-          const mid = rec.content_item_id as string;
-          if (!mediaMap[mid]) mediaMap[mid] = {};
-          if (rec.media_type === "image" && rec.data_url) {
-            mediaMap[mid].image = rec.data_url;
-          }
-          if (rec.media_type === "video" && rec.data_url) {
-            mediaMap[mid].video = rec.data_url;
-          }
+      const mediaMap = items.reduce<Record<string, { image?: string; video?: string }>>((accumulator, item) => {
+        if (!item.media) {
+          return accumulator;
         }
-        setMedia(mediaMap);
-      }
+
+        accumulator[item.content_item_id] = {
+          ...(item.media.image ? { image: item.media.image } : {}),
+          ...(item.media.video ? { video: item.media.video } : {}),
+        };
+        return accumulator;
+      }, {});
+      setMedia(mediaMap);
 
       // Fetch existing ratings
       const ratingRes = await fetch(

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { upsertContentPublish, listPublishedContent } from "@/lib/nosql";
+import { upsertContentPublish, listMedia, listPublishedContent } from "@/lib/nosql";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,8 +13,39 @@ export async function GET(request: Request) {
     );
   }
 
-  const items = await listPublishedContent(classId, assignmentId);
-  return NextResponse.json({ items });
+  const [items, mediaRecords] = await Promise.all([
+    listPublishedContent(classId, assignmentId),
+    listMedia(classId, assignmentId, "cohort"),
+  ]);
+
+  const mediaByItem = mediaRecords.reduce<Record<string, { image?: string; video?: string }>>((accumulator, record) => {
+    if (!record.content_item_id || !record.data_url) {
+      return accumulator;
+    }
+
+    if (!accumulator[record.content_item_id]) {
+      accumulator[record.content_item_id] = {};
+    }
+
+    if (record.media_type === "image") {
+      accumulator[record.content_item_id].image = record.data_url;
+    }
+
+    if (record.media_type === "video") {
+      accumulator[record.content_item_id].video = record.data_url;
+    }
+
+    return accumulator;
+  }, {});
+
+  return NextResponse.json({
+    items: items.map((item) => ({
+      ...item,
+      ...(mediaByItem[item.content_item_id]
+        ? { media: mediaByItem[item.content_item_id] }
+        : {}),
+    })),
+  });
 }
 
 export async function POST(request: Request) {

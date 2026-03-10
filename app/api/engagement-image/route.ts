@@ -47,8 +47,8 @@ If the material includes dialogue, clearly show the speakers and what they are r
 If the material includes questions, show the scene students should reason about.
 If the material describes a phenomenon, make that phenomenon visually central.
 Style: clean, minimal, classroom-friendly.
-Hard requirement: no text anywhere in the image.
-Do not render words, letters, numbers, symbols, labels, captions, signs, or watermarks.`;
+Hard requirement: the image must contain zero text of any kind.
+Do not render words, letters, numbers, equations, symbols, speech bubbles with text, captions, labels, posters, signs, UI text, or watermarks.`;
 };
 
 export const maxDuration = 60; // seconds – image generation can take 15-30s
