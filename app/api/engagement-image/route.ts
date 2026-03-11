@@ -41,18 +41,14 @@ Text style: ${textModes}
 Title: ${item.title}
 Student-facing text:
 ${item.body}
-${visualBrief ? `Visual brief: ${visualBrief}` : "Visual brief: Show the main scene, concept, or conversation implied by the text."}
+${visualBrief ? `Visual brief: ${visualBrief}` : "Visual brief: Show the main scene, phenomenon, or conversation implied by the text."}
 
 If the material includes dialogue, clearly show the speakers and what they are reacting to.
 If the material includes questions, show the scene students should reason about.
-If the material describes a concept or process, make it visually central.
+If the material describes a phenomenon, make that phenomenon visually central.
 Style: clean, minimal, classroom-friendly.
-When it helps understanding, add concise annotations directly on the image:
-- Use simple arrows to indicate relationships, sequences, or key connections between elements.
-- Add short text labels (1-4 words max) next to key objects or arrows to name important concepts or elements.
-- Keep labels in plain sans-serif font, high contrast against the background.
-- Do not add paragraphs, sentences, captions, watermarks, or decorative text. Only functional labels and arrows.
-If the scene is self-explanatory without annotations, omit them.`;
+Hard requirement: the image must contain zero text of any kind.
+Do not render words, letters, numbers, equations, symbols, speech bubbles with text, captions, labels, posters, signs, UI text, or watermarks.`;
 };
 
 const MAX_REFINEMENT_PROMPT_LENGTH = 500;
