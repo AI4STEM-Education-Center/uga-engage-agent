@@ -48,31 +48,44 @@ npm install
 
 ### 2. Configure environment variables
 
-Copy `.env.example` or create `.env` in the project root:
+Copy `.env.example` to `.env` in the project root, then fill in your secrets:
 
 ```bash
-# Required
-OPENAI_API_KEY=your_key_here
+cp .env.example .env
+```
 
-# SSO (must match the GENIUS Learning Platform secret)
+Current example values:
+
+```bash
+# Required — text/image/strategy generation
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Required for real GENIUS SSO flows
 SSO_SECRET=your_shared_sso_secret
 
-# Origins allowed to embed this app in an iframe (comma-separated)
+# Required if the app is embedded in an iframe from another origin
 ALLOWED_ORIGINS=http://localhost:3000
 
-# Optional — AI model overrides
+# Optional — video generation
+GROK_API_KEY=your_grok_api_key_here
+
+# Optional — model overrides
 OPENAI_MODEL=gpt-5-nano
 OPENAI_IMAGE_MODEL=gpt-image-1
 
-# Optional — DynamoDB (uses local JSON store if not set)
-# Use ENGAGE_ prefix to avoid Next.js reserved "AWS" prefix
+# Optional — AWS-backed persistence
+# If these are omitted, the app falls back to local JSON storage in `data/engage-nosql.json`.
+DYNAMODB_TABLE=genius_engage_agent_data
 ENGAGE_AWS_REGION=us-east-2
-ENGAGE_AWS_ACCESS_KEY_ID=your_access_key
-ENGAGE_AWS_SECRET_ACCESS_KEY=your_secret_key
-DYNAMODB_TABLE=engage_strategy_cache
+ENGAGE_AWS_ACCESS_KEY_ID=your_aws_access_key_id
+ENGAGE_AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+ENGAGE_S3_BUCKET=genius-engage-agent-media
+
+# Optional — script tuning
+FEEDBACK_TICKET_CONCURRENCY=6
 ```
 
-Set `ENGAGE_AWS_REGION` to the actual region where your DynamoDB table lives. For your current AWS setup, that should be `us-east-2`.
+Set `ENGAGE_AWS_REGION` to the actual region where your DynamoDB table and S3 bucket live. For the current shared AWS setup, that is `us-east-2`.
 
 ### 3. Run the development server
 
@@ -150,11 +163,17 @@ them, so they should not remain enabled on a public production deployment.
 
 ## DynamoDB table schema
 
-Create a table named `engage_strategy_cache` (or your chosen `DYNAMODB_TABLE`)
-with:
+If you enable DynamoDB, create a table named `genius_engage_agent_data` (or
+your chosen `DYNAMODB_TABLE`) with:
 
 - **Partition key**: `class_id` (String)
-- **Sort key**: varies by record type (`ASSIGN#...`, `PLAN#...`, `MEDIA#...`,
-  `QUIZ_STATUS#...`, `ANSWER#...`, `CONTENT_PUB#...`, `RATING#...`)
-- **GSI** `student-index`: partition key `student_id` (String), sort key
-  `updated_at` (String)
+- **Sort key**: `record_id` (String)
+- **Sort key values**: prefixed by record type, such as `PLAN#...`, `MEDIA#...`,
+  `QUIZ_STATUS#...`, `ANSWER#...`, `CONTENT_PUB#...`, and `RATING#...`
+
+The current code only queries the table's primary key, so no secondary index is
+required for local development or the current app flows.
+
+If you also enable S3-backed media storage, create a bucket named
+`genius-engage-agent-media` (or your chosen `ENGAGE_S3_BUCKET`) in the same
+region as DynamoDB.
