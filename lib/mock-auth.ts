@@ -43,8 +43,11 @@ export function getMockUser(role: MockUserRole): UserContext {
   return MOCK_USERS[role];
 }
 
-export function createMockUserRedirect(request: Request, role: MockUserRole) {
-  const redirectUrl = new URL("/", request.url);
-  redirectUrl.searchParams.set(MOCK_USER_QUERY_PARAM, role);
-  return NextResponse.redirect(redirectUrl);
+export function createMockUserRedirect(_request: Request, role: MockUserRole) {
+  return new NextResponse(null, {
+    status: 307,
+    headers: {
+      location: `/?${MOCK_USER_QUERY_PARAM}=${role}`,
+    },
+  });
 }

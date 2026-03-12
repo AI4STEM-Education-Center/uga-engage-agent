@@ -10,7 +10,7 @@ describe("test auth routes", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/?mock_user=teacher",
+      "/?mock_user=teacher",
     );
   });
 
@@ -21,7 +21,7 @@ describe("test auth routes", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/?mock_user=student",
+      "/?mock_user=student",
     );
   });
 });
