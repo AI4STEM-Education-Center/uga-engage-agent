@@ -21,12 +21,59 @@ const AuthCtx = createContext<AuthState>({
   error: null,
 });
 
+const TOKEN_STORAGE_KEY = "engage-sso-token";
+
 export const useAuth = () => useContext(AuthCtx);
+
+function readStoredSSOToken(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeSSOToken(token: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } catch {
+    // Ignore storage failures and fall back to query-param auth only.
+  }
+}
+
+function clearStoredSSOToken() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 function parseSSOFromUrl(): string | null {
   if (typeof window === "undefined") return null;
-  const params = new URLSearchParams(window.location.search);
-  return params.get("sso_token");
+
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get("sso_token");
+  if (!token) {
+    return null;
+  }
+
+  storeSSOToken(token);
+  url.searchParams.delete("sso_token");
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, "", nextUrl);
+
+  return token;
+}
+
+function resolveSSOToken(): string | null {
+  return parseSSOFromUrl() ?? readStoredSSOToken();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -37,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const token = parseSSOFromUrl();
+    const token = resolveSSOToken();
     if (!token) {
       setState({ user: null, loading: false, error: "No SSO token provided." });
       return;
@@ -58,9 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return res.json();
       })
       .then((data) => {
+        storeSSOToken(token);
         setState({ user: data.user as UserContext, loading: false, error: null });
       })
       .catch((err) => {
+        clearStoredSSOToken();
         setState({
           user: null,
           loading: false,
