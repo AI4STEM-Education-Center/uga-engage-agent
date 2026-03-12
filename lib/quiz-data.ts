@@ -1,4 +1,4 @@
-import type { Lesson } from "./types";
+import type { Lesson, QuizItem } from "./types";
 
 import lesson1 from "@/data/lesson1.json";
 import lesson2 from "@/data/lesson2.json";
@@ -9,15 +9,49 @@ import lesson6 from "@/data/lesson6.json";
 import lesson7 from "@/data/lesson7.json";
 import lesson8 from "@/data/lesson8.json";
 
+type RawQuizItem = Omit<QuizItem, "type"> & {
+  type: string;
+};
+
+type RawLesson = Omit<Lesson, "misconceptions" | "quiz_items"> & {
+  misconceptions: Lesson["misconceptions"] | Record<string, string>;
+  quiz_items: RawQuizItem[];
+};
+
+function normalizeQuizItemType(type: string): QuizItem["type"] {
+  if (type === "multiple_choice" || type === "confidence_check") {
+    return type;
+  }
+
+  throw new Error(`Unsupported quiz item type: ${type}`);
+}
+
+function normalizeQuizItem(rawItem: RawQuizItem): QuizItem {
+  return {
+    ...rawItem,
+    type: normalizeQuizItemType(rawItem.type),
+  };
+}
+
+function normalizeLesson(rawLesson: RawLesson): Lesson {
+  return {
+    ...rawLesson,
+    misconceptions: Array.isArray(rawLesson.misconceptions)
+      ? rawLesson.misconceptions
+      : Object.values(rawLesson.misconceptions),
+    quiz_items: rawLesson.quiz_items.map(normalizeQuizItem),
+  };
+}
+
 const lessons: Lesson[] = [
-  lesson1 as Lesson,
-  lesson2 as Lesson,
-  lesson3 as Lesson,
-  lesson4 as Lesson,
-  lesson5 as Lesson,
-  lesson6 as Lesson,
-  lesson7 as Lesson,
-  lesson8 as Lesson,
+  normalizeLesson(lesson1),
+  normalizeLesson(lesson2),
+  normalizeLesson(lesson3),
+  normalizeLesson(lesson4),
+  normalizeLesson(lesson5),
+  normalizeLesson(lesson6),
+  normalizeLesson(lesson7),
+  normalizeLesson(lesson8),
 ];
 
 export function getAllLessons(): Lesson[] {

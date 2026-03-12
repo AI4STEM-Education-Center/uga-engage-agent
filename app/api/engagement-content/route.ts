@@ -23,6 +23,8 @@ type GeneratedContentItem = Pick<
   "type" | "title" | "body" | "textModes" | "visualBrief"
 >;
 
+type GeneratedResponseItem = Omit<ContentItem, "id">;
+
 const ALLOWED_TEXT_MODES = [
   "questions",
   "phenomenon",
@@ -110,7 +112,7 @@ export async function POST(request: Request) {
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
     const strategies =
       selectedStrategies.length > 0 ? selectedStrategies : [plan.strategy];
-    const items: ContentItem[] = [];
+    const items: GeneratedResponseItem[] = [];
 
     const strategyResults = await Promise.all(
       strategies.map(async (strategy) => {
@@ -141,7 +143,7 @@ export async function POST(request: Request) {
             strategy,
             ...(textModes.length > 0 ? { textModes } : {}),
             ...(item.visualBrief?.trim() ? { visualBrief: item.visualBrief.trim() } : {}),
-          } satisfies ContentItem;
+          } satisfies GeneratedResponseItem;
         });
       }),
     );

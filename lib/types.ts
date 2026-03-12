@@ -51,7 +51,9 @@ export type QuizItem = {
   question_number?: number;
   stem: string;
   options: Record<string, string>;
+  correct_answer?: string;
   matched_misconception?: string;
+  distractor_misconception_map?: Partial<Record<string, string>>;
 };
 
 export type Lesson = {
