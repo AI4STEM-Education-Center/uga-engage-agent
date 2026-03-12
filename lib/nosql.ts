@@ -112,13 +112,15 @@ const emptyStore: Store = {
 const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "engage-nosql.json");
 
+const DEFAULT_ENGAGE_AWS_REGION = "us-east-2";
+
 const useDynamoDb = Boolean(process.env.DYNAMODB_TABLE);
-const dynamoRegion = process.env.ENGAGE_AWS_REGION;
+const dynamoRegion = process.env.ENGAGE_AWS_REGION ?? DEFAULT_ENGAGE_AWS_REGION;
 const dynamoTableName = process.env.DYNAMODB_TABLE ?? "";
 const dynamoAccessKeyId = process.env.ENGAGE_AWS_ACCESS_KEY_ID;
 const dynamoSecretAccessKey = process.env.ENGAGE_AWS_SECRET_ACCESS_KEY;
 const s3Bucket = process.env.ENGAGE_S3_BUCKET;
-const s3Region = process.env.ENGAGE_AWS_REGION ?? process.env.AWS_REGION ?? "us-east-1";
+const s3Region = process.env.ENGAGE_AWS_REGION ?? process.env.AWS_REGION ?? DEFAULT_ENGAGE_AWS_REGION;
 
 const toPlainStudentId = (value: string | undefined, fallback = "") =>
   value?.replace(/^STUDENT#/, "") ?? fallback;
@@ -157,9 +159,6 @@ let dynamoDocClient: DynamoDBDocumentClient | null = null;
 const getDynamoClient = () => {
   if (!useDynamoDb) {
     return null;
-  }
-  if (!dynamoRegion) {
-    throw new Error("ENGAGE_AWS_REGION is required when using DynamoDB.");
   }
   if (!dynamoTableName) {
     throw new Error("DYNAMODB_TABLE is required when using DynamoDB.");

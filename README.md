@@ -66,11 +66,13 @@ OPENAI_IMAGE_MODEL=gpt-image-1
 
 # Optional — DynamoDB (uses local JSON store if not set)
 # Use ENGAGE_ prefix to avoid Next.js reserved "AWS" prefix
-ENGAGE_AWS_REGION=us-east-1
+ENGAGE_AWS_REGION=us-east-2
 ENGAGE_AWS_ACCESS_KEY_ID=your_access_key
 ENGAGE_AWS_SECRET_ACCESS_KEY=your_secret_key
 DYNAMODB_TABLE=engage_strategy_cache
 ```
+
+Set `ENGAGE_AWS_REGION` to the actual region where your DynamoDB table lives. For your current AWS setup, that should be `us-east-2`.
 
 ### 3. Run the development server
 

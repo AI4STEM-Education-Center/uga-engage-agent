@@ -43,6 +43,18 @@ describe("GET /api/quiz-status", () => {
     const data = await res.json();
     expect(data.quizStatus).toBeNull();
   });
+
+  it("should return 500 with a helpful error when storage fails", async () => {
+    const { getQuizStatus } = await import("@/lib/nosql");
+    vi.mocked(getQuizStatus).mockRejectedValueOnce(new Error("Requested resource not found"));
+
+    const req = new Request("http://localhost:3000/api/quiz-status?classId=c1&assignmentId=a1");
+    const res = await GET(req);
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    expect(data.error).toBe("Database resource not found. Check DYNAMODB_TABLE and ENGAGE_AWS_REGION.");
+  });
+
 });
 
 describe("POST /api/quiz-status", () => {

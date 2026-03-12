@@ -3,6 +3,16 @@ import { listAllMedia } from "@/lib/nosql";
 
 export const maxDuration = 60;
 
+function formatStorageError(error: unknown) {
+  const message = error instanceof Error ? error.message : "Failed to load gallery.";
+
+  if (message.includes("Requested resource not found")) {
+    return "Database resource not found. Check DYNAMODB_TABLE and ENGAGE_AWS_REGION.";
+  }
+
+  return message;
+}
+
 /**
  * GET /api/gallery
  *
@@ -26,9 +36,14 @@ export async function GET(request: NextRequest) {
     const page = await listAllMedia({ mediaType, search, limit, cursor });
     return NextResponse.json(page);
   } catch (error) {
-    const message =
+    const rawMessage =
       error instanceof Error ? error.message : "Failed to load gallery.";
-    console.error("gallery route error:", message);
+    const message = formatStorageError(error);
+    console.error("gallery route error:", {
+      message: rawMessage,
+      table: process.env.DYNAMODB_TABLE ?? "(missing)",
+      region: process.env.ENGAGE_AWS_REGION ?? "us-east-2",
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
