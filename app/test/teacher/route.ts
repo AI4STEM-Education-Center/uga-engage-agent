@@ -1,5 +1,5 @@
-import { createTestAuthRedirect } from "@/lib/test-auth";
+import { createMockUserRedirect } from "@/lib/mock-auth";
 
 export async function GET(request: Request) {
-  return createTestAuthRedirect(request, "teacher");
+  return createMockUserRedirect(request, "teacher");
 }

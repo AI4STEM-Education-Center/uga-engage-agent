@@ -57,10 +57,6 @@ OPENAI_API_KEY=your_key_here
 # SSO (must match the GENIUS Learning Platform secret)
 SSO_SECRET=your_shared_sso_secret
 
-# Optional — temporary test-login routes (disable when not needed)
-TEST_AUTH_ENABLED=false
-TEST_AUTH_KEY=replace_with_a_random_secret
-
 # Origins allowed to embed this app in an iframe (comma-separated)
 ALLOWED_ORIGINS=http://localhost:3000
 
@@ -125,28 +121,30 @@ Platform — you do not need a separate secret per agent.
 
 ### Standalone test-login routes
 
-If you want to test the app without coming through the GENIUS platform, you can
-turn on two temporary routes that mint a short-lived SSO token and redirect into
-the app:
+If you want to test the app without coming through the GENIUS platform, open
+one of these URLs directly:
 
-- `GET /test/teacher?key=<TEST_AUTH_KEY>`
-- `GET /test/student?key=<TEST_AUTH_KEY>`
+- `/test/teacher`
+- `/test/student`
 
-Optional query params let you override the generated user fields:
-`userId`, `name`, `email`, `classId`, `className`, `assignmentId`, `taskId`,
-and `redirect`.
+Those routes redirect to `/` in a built-in mock auth mode and store the mock
+role in browser session storage, so navigation to other app pages in the same
+browser tab keeps working.
 
 Example URLs:
 
 ```text
-http://localhost:3000/test/teacher?key=replace_with_a_random_secret
-http://localhost:3000/test/student?key=replace_with_a_random_secret&classId=demo-class&assignmentId=demo-assignment
+http://localhost:3000/test/teacher
+http://localhost:3000/test/student
 ```
 
-These routes only work when `TEST_AUTH_ENABLED=true` and the request includes a
-matching `TEST_AUTH_KEY`. The token is cached in browser session storage so it
-continues working as you navigate between pages in the same tab. Disable these
-routes again when you are done testing.
+The mock teacher and student share the same `classId` (`demo-class`) and
+`assignmentId` (`demo-assignment`), which makes it easier to test both sides of
+one flow. Use separate browser tabs if you want the teacher and student open at
+the same time.
+
+These routes are for testing only. Anyone who can reach the app URL can use
+them, so they should not remain enabled on a public production deployment.
 
 ## DynamoDB table schema
 

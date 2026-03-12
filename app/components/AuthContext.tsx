@@ -8,6 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import type { UserContext } from "@/lib/auth";
+import {
+  getMockUser,
+  MOCK_USER_QUERY_PARAM,
+  MOCK_USER_STORAGE_KEY,
+  parseMockUserRole,
+  type MockUserRole,
+} from "@/lib/mock-auth";
 
 type AuthState = {
   user: UserContext | null;
@@ -55,6 +62,46 @@ function clearStoredSSOToken() {
   }
 }
 
+function readStoredMockUser(): UserContext | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const role = parseMockUserRole(
+      window.sessionStorage.getItem(MOCK_USER_STORAGE_KEY),
+    );
+    return role ? getMockUser(role) : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeMockUser(role: MockUserRole) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(MOCK_USER_STORAGE_KEY, role);
+  } catch {
+    // Ignore storage failures and fall back to query-param auth only.
+  }
+}
+
+function clearStoredMockUser() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.removeItem(MOCK_USER_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function replaceUrlSearchParam(name: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(name);
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, "", nextUrl);
+}
+
 function parseSSOFromUrl(): string | null {
   if (typeof window === "undefined") return null;
 
@@ -64,16 +111,24 @@ function parseSSOFromUrl(): string | null {
     return null;
   }
 
-  storeSSOToken(token);
-  url.searchParams.delete("sso_token");
-  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-  window.history.replaceState({}, "", nextUrl);
-
+  replaceUrlSearchParam("sso_token");
   return token;
 }
 
-function resolveSSOToken(): string | null {
-  return parseSSOFromUrl() ?? readStoredSSOToken();
+function parseMockUserFromUrl(): UserContext | null {
+  if (typeof window === "undefined") return null;
+
+  const url = new URL(window.location.href);
+  const role = parseMockUserRole(url.searchParams.get(MOCK_USER_QUERY_PARAM));
+  if (!role) {
+    return null;
+  }
+
+  clearStoredSSOToken();
+  storeMockUser(role);
+  replaceUrlSearchParam(MOCK_USER_QUERY_PARAM);
+
+  return getMockUser(role);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -84,38 +139,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const token = resolveSSOToken();
-    if (!token) {
-      setState({ user: null, loading: false, error: "No SSO token provided." });
+    const authenticateToken = (token: string) => {
+      fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(
+              (body as Record<string, string>).error ?? "Authentication failed.",
+            );
+          }
+          return res.json();
+        })
+        .then((data) => {
+          storeSSOToken(token);
+          clearStoredMockUser();
+          setState({ user: data.user as UserContext, loading: false, error: null });
+        })
+        .catch((err) => {
+          clearStoredSSOToken();
+          setState({
+            user: null,
+            loading: false,
+            error: err instanceof Error ? err.message : "Authentication failed.",
+          });
+        });
+    };
+
+    const urlToken = parseSSOFromUrl();
+    if (urlToken) {
+      authenticateToken(urlToken);
       return;
     }
 
-    fetch("/api/auth/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(
-            (body as Record<string, string>).error ?? "Authentication failed.",
-          );
-        }
-        return res.json();
-      })
-      .then((data) => {
-        storeSSOToken(token);
-        setState({ user: data.user as UserContext, loading: false, error: null });
-      })
-      .catch((err) => {
-        clearStoredSSOToken();
-        setState({
-          user: null,
-          loading: false,
-          error: err instanceof Error ? err.message : "Authentication failed.",
-        });
-      });
+    const mockUserFromUrl = parseMockUserFromUrl();
+    if (mockUserFromUrl) {
+      setState({ user: mockUserFromUrl, loading: false, error: null });
+      return;
+    }
+
+    const storedToken = readStoredSSOToken();
+    if (storedToken) {
+      authenticateToken(storedToken);
+      return;
+    }
+
+    const storedMockUser = readStoredMockUser();
+    if (storedMockUser) {
+      setState({ user: storedMockUser, loading: false, error: null });
+      return;
+    }
+
+    setState({ user: null, loading: false, error: "No SSO token provided." });
   }, []);
 
   return <AuthCtx.Provider value={state}>{children}</AuthCtx.Provider>;
