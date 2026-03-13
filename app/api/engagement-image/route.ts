@@ -119,6 +119,8 @@ export async function POST(request: Request) {
         image: imageInput,
         prompt: trimmedRefine,
         size: "1024x1024",
+        quality: "high",
+        output_format: "webp",
       });
     } else {
       const prompt = buildPrompt(item, lessonNumber);
