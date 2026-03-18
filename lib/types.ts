@@ -26,10 +26,18 @@ export type ContentItem = {
   visualBrief?: string;
 };
 
+export type ImageVersion = {
+  url: string;
+  refinementPrompt?: string;
+  createdAt: string;
+};
+
 export type ImageState = {
   status: "idle" | "loading" | "ready" | "error";
   url?: string;
   error?: string;
+  history?: ImageVersion[];
+  historyIndex?: number;
 };
 
 export type VideoState = {
