@@ -64,6 +64,40 @@ describe("POST /api/content-publish", () => {
     expect(data.published).toHaveLength(2);
   });
 
+
+  it("should strip inline data media before persisting published content", async () => {
+    const res = await POST(new Request("http://localhost:3000/api/content-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        classId: "c1",
+        assignmentId: "a1",
+        publishedBy: "teacher-1",
+        contentItems: [{
+          id: "item-1",
+          type: "material",
+          title: "Test",
+          body: "Body",
+          strategy: "analogy",
+          media: {
+            image: "data:image/webp;base64,AAAA",
+            video: "https://example.com/video.mp4",
+          },
+        }],
+      }),
+    }));
+
+    expect(res.status).toBe(201);
+    const getRes = await GET(new Request("http://localhost:3000/api/content-publish?classId=c1&assignmentId=a1"));
+    expect(getRes.status).toBe(200);
+    const data = await getRes.json();
+    expect(data.items).toHaveLength(1);
+    expect(data.items[0].content_json).not.toContain("data:image/webp");
+    expect(data.items[0].media).toEqual({
+      video: "https://example.com/video.mp4",
+    });
+  });
+
   it("should reject empty content items", async () => {
     const req = new Request("http://localhost:3000/api/content-publish", {
       method: "POST",

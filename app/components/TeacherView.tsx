@@ -129,6 +129,13 @@ const trimPersistedVideoState = (state: VideoState): VideoState | null => {
   return null;
 };
 
+const getEmbeddablePublishedMediaUrl = (value: string | undefined) => {
+  if (!value || value.startsWith("data:")) {
+    return undefined;
+  }
+  return value;
+};
+
 const clearOtherDraftStorage = (keepKey: string) => {
   const keysToRemove: string[] = [];
 
@@ -1155,13 +1162,18 @@ export default function TeacherView({ user }: Props) {
       const items: PublishableContentItem[] = content
         .filter((item) => selectedForPublish.has(item.id))
         .map((item) => {
+          const imageUrl =
+            images[item.id]?.status === "ready"
+              ? getEmbeddablePublishedMediaUrl(images[item.id]?.url)
+              : undefined;
+          const videoUrl =
+            videos[item.id]?.status === "ready"
+              ? getEmbeddablePublishedMediaUrl(videos[item.id]?.url)
+              : undefined;
+
           const media: SharedContentMedia = {
-            ...(images[item.id]?.status === "ready" && images[item.id]?.url
-              ? { image: images[item.id]?.url }
-              : {}),
-            ...(videos[item.id]?.status === "ready" && videos[item.id]?.url
-              ? { video: videos[item.id]?.url }
-              : {}),
+            ...(imageUrl ? { image: imageUrl } : {}),
+            ...(videoUrl ? { video: videoUrl } : {}),
           };
 
           return {
