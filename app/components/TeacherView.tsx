@@ -12,6 +12,7 @@ import type {
   Plan,
   ContentItem,
   ImageState,
+  ImageVersion,
   VideoState,
   StudentStrategyResult,
   Lesson,
@@ -19,6 +20,8 @@ import type {
   StudentAnswer,
   TextMode,
 } from "@/lib/types";
+
+const MAX_IMAGE_VERSIONS = 10;
 
 type Props = {
   user: UserContext;
@@ -43,6 +46,10 @@ type PersistedDraft = {
 };
 
 
+// Module-level cache: survives component unmount/remount during SPA navigation (Link).
+// Lost only on full page refresh — acceptable trade-off vs. localStorage size limits.
+const imageHistoryCache = new Map<string, { history: ImageVersion[]; historyIndex: number }>();
+
 const LEGACY_DRAFT_STORAGE_KEY = "engage-agent:draft:v2";
 const DRAFT_STORAGE_PREFIX = "engage-agent:draft:v3";
 const DRAFT_VERSION = 2;
@@ -65,7 +72,12 @@ const trimPersistedImageState = (state: ImageState): ImageState | null => {
   }
 
   if (state.status === "ready" && state.url && !state.url.startsWith("data:")) {
-    return { status: "ready", url: state.url };
+    const trimmedHistory = state.history?.filter((v) => !v.url.startsWith("data:"));
+    return {
+      status: "ready",
+      url: state.url,
+      ...(trimmedHistory?.length ? { history: trimmedHistory, historyIndex: Math.min(state.historyIndex ?? 0, trimmedHistory.length - 1) } : {}),
+    };
   }
 
   return null;
@@ -497,7 +509,14 @@ export default function TeacherView({ user }: Props) {
                   state.status === "error" ||
                   (state.status === "ready" && Boolean(state.url))
                 ),
-            ),
+            ).map(([itemId, state]) => {
+              // Merge cached history back (survives SPA navigation even when base64 was trimmed)
+              const cached = imageHistoryCache.get(itemId);
+              if (cached && state.status === "ready") {
+                return [itemId, { ...state, history: cached.history, historyIndex: cached.historyIndex, url: cached.history[cached.historyIndex]?.url ?? state.url }];
+              }
+              return [itemId, state];
+            }),
           ) as Record<string, ImageState>;
           const restoredVideos = Object.fromEntries(
             Object.entries(draft.videos ?? {}).filter(
@@ -519,7 +538,20 @@ export default function TeacherView({ user }: Props) {
           setAnnotationReason(draft.annotationReason ?? "");
           setAnnotationStatus(draft.annotationStatus ?? "idle");
           setContent(restoredContent);
-          setImages(restoredImages);
+          // Restore images from cache for items that were stripped from localStorage
+          const mergedImages = { ...restoredImages };
+          for (const item of restoredContent) {
+            if (!mergedImages[item.id] && imageHistoryCache.has(item.id)) {
+              const cached = imageHistoryCache.get(item.id)!;
+              mergedImages[item.id] = {
+                status: "ready",
+                url: cached.history[cached.historyIndex]?.url,
+                history: cached.history,
+                historyIndex: cached.historyIndex,
+              };
+            }
+          }
+          setImages(mergedImages);
           setVideos(restoredVideos);
           setSelectedForPublish(new Set((draft.selectedForPublish ?? []).filter((itemId) => contentIds.has(itemId))));
           setPublishedContentIds(new Set((draft.publishedContentIds ?? []).filter((itemId) => contentIds.has(itemId))));
@@ -555,6 +587,15 @@ export default function TeacherView({ user }: Props) {
     if (!hasPendingVideos) return;
     persistDraftSnapshot(buildDraftSnapshot());
   }, [isHydrated, videos, buildDraftSnapshot, persistDraftSnapshot]);
+
+  // Sync image history to module-level cache so it survives SPA navigation
+  useEffect(() => {
+    for (const [itemId, state] of Object.entries(images)) {
+      if (state.history?.length) {
+        imageHistoryCache.set(itemId, { history: state.history, historyIndex: state.historyIndex ?? 0 });
+      }
+    }
+  }, [images]);
 
   // Restore persisted Step 3 media/publish state before any regeneration kicks in.
   useEffect(() => {
@@ -595,7 +636,26 @@ export default function TeacherView({ user }: Props) {
             }
           }
 
-          setImages((prev) => ({ ...prev, ...persistedImages }));
+          setImages((prev) => {
+            const merged = { ...prev };
+            for (const [itemId, persisted] of Object.entries(persistedImages)) {
+              const existing = merged[itemId];
+              if (existing?.history?.length) {
+                // Preserve in-memory history
+                merged[itemId] = { ...persisted, history: existing.history, historyIndex: existing.historyIndex };
+              } else if (persisted.url) {
+                // Initialize history for DB-restored images
+                merged[itemId] = {
+                  ...persisted,
+                  history: [{ url: persisted.url, createdAt: new Date().toISOString() }],
+                  historyIndex: 0,
+                };
+              } else {
+                merged[itemId] = persisted;
+              }
+            }
+            return merged;
+          });
           setVideos((prev) => ({ ...prev, ...persistedVideos }));
         }
 
@@ -715,7 +775,19 @@ export default function TeacherView({ user }: Props) {
         const publishedIds = restoredContent.map((item) => item.id);
 
         setContent(restoredContent);
-        setImages(restoredImages);
+        // Initialize history for published-restored images
+        const imagesWithHistory: Record<string, ImageState> = {};
+        for (const [itemId, state] of Object.entries(restoredImages)) {
+          if (state.url) {
+            const cached = imageHistoryCache.get(itemId);
+            imagesWithHistory[itemId] = cached?.history?.length
+              ? { ...state, history: cached.history, historyIndex: cached.historyIndex }
+              : { ...state, history: [{ url: state.url, createdAt: new Date().toISOString() }], historyIndex: 0 };
+          } else {
+            imagesWithHistory[itemId] = state;
+          }
+        }
+        setImages(imagesWithHistory);
         setVideos(restoredVideos);
         setSelectedForPublish(new Set(publishedIds));
         setPublishedContentIds(new Set(publishedIds));
@@ -1141,7 +1213,7 @@ export default function TeacherView({ user }: Props) {
 
     setImages((prev) => {
       const next = { ...prev };
-      for (const item of pending) next[item.id] = { status: "loading" };
+      for (const item of pending) next[item.id] = { ...prev[item.id], status: "loading" };
       return next;
     });
 
@@ -1159,7 +1231,24 @@ export default function TeacherView({ user }: Props) {
           let data: Record<string, unknown>;
           try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
           if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
-          if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "ready", url: data.url as string } }));
+          if (!cancelled) {
+            const newUrl = data.url as string;
+            setImages((prev) => {
+              // If history already exists (e.g. from cache), don't reset it
+              if (prev[item.id]?.history?.length) {
+                return { ...prev, [item.id]: { ...prev[item.id], status: "ready", url: newUrl } };
+              }
+              return {
+                ...prev,
+                [item.id]: {
+                  status: "ready",
+                  url: newUrl,
+                  history: [{ url: newUrl, createdAt: new Date().toISOString() }],
+                  historyIndex: 0,
+                },
+              };
+            });
+          }
         } catch (err) {
           if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: err instanceof Error ? err.message : "Image failed." } }));
         }
@@ -1217,6 +1306,48 @@ export default function TeacherView({ user }: Props) {
     }
   };
 
+  const persistCurrentImage = async (itemId: string, imageUrl: string) => {
+    if (!classId || !assignmentId || !imageUrl) return;
+    try {
+      await fetch("/api/media", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId,
+          assignmentId,
+          studentId: "cohort",
+          contentItemId: itemId,
+          mediaType: "image",
+          mimeType: "image/webp",
+          dataUrl: imageUrl,
+        }),
+      });
+    } catch {
+      // Best-effort — don't block navigation
+    }
+  };
+
+  const navigateImageVersion = (itemId: string, direction: "prev" | "next") => {
+    const current = images[itemId];
+    if (!current?.history?.length) return;
+    const currentIndex = current.historyIndex ?? (current.history.length - 1);
+    const newIndex = direction === "prev"
+      ? Math.max(0, currentIndex - 1)
+      : Math.min(current.history.length - 1, currentIndex + 1);
+    if (newIndex === currentIndex) return;
+    const newUrl = current.history[newIndex].url;
+    setImages((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        url: newUrl,
+        historyIndex: newIndex,
+      },
+    }));
+    // Update DB so gallery reflects the currently displayed version
+    void persistCurrentImage(itemId, newUrl);
+  };
+
   const [refineError, setRefineError] = useState<string | null>(null);
 
   const handleRefine = async () => {
@@ -1247,7 +1378,33 @@ export default function TeacherView({ user }: Props) {
       let data: Record<string, unknown>;
       try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
       if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
-      setImages((prev) => ({ ...prev, [refineTarget.itemId]: { status: "ready", url: data.url as string } }));
+      setImages((prev) => {
+        const current = prev[refineTarget.itemId];
+        const existingHistory = current?.history ?? [];
+        // Truncate after current index if user refined from a non-latest version
+        const baseHistory = current?.historyIndex !== undefined
+          ? existingHistory.slice(0, current.historyIndex + 1)
+          : existingHistory;
+        const newVersion: ImageVersion = {
+          url: data.url as string,
+          refinementPrompt: refinePrompt.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        const newHistory = [...baseHistory, newVersion];
+        // Cap at MAX_IMAGE_VERSIONS — drop oldest entries
+        const cappedHistory = newHistory.length > MAX_IMAGE_VERSIONS
+          ? newHistory.slice(newHistory.length - MAX_IMAGE_VERSIONS)
+          : newHistory;
+        return {
+          ...prev,
+          [refineTarget.itemId]: {
+            status: "ready",
+            url: data.url as string,
+            history: cappedHistory,
+            historyIndex: cappedHistory.length - 1,
+          },
+        };
+      });
       setRefinePrompt("");
     } catch (err) {
       // Keep the current image intact — just show the error in the modal
@@ -1704,6 +1861,23 @@ export default function TeacherView({ user }: Props) {
                                   </div>
                                 )}
                               </div>
+                              {(images[item.id]?.history?.length ?? 0) > 1 && (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button type="button" disabled={(images[item.id]?.historyIndex ?? 0) <= 0}
+                                    onClick={() => navigateImageVersion(item.id, "prev")}
+                                    className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                                    &#8592;
+                                  </button>
+                                  <span className="text-[10px] text-slate-500">
+                                    {(images[item.id]?.historyIndex ?? 0) + 1}/{images[item.id]?.history?.length ?? 0}
+                                  </span>
+                                  <button type="button" disabled={(images[item.id]?.historyIndex ?? 0) >= (images[item.id]?.history?.length ?? 1) - 1}
+                                    onClick={() => navigateImageVersion(item.id, "next")}
+                                    className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                                    &#8594;
+                                  </button>
+                                </div>
+                              )}
                               <div className="flex w-full gap-1.5">
                                 <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => downloadFile(images[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`)}
                                   className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
@@ -1830,18 +2004,42 @@ export default function TeacherView({ user }: Props) {
               <p className="text-sm text-slate-500">{refineTarget.title}</p>
 
               {/* Image preview */}
-              <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
-                {images[refineTarget.itemId]?.status === "ready" && images[refineTarget.itemId]?.url && (
-                  <img className="max-h-[40vh] w-full rounded-xl object-contain" src={images[refineTarget.itemId]?.url} alt={refineTarget.title} />
-                )}
-                {images[refineTarget.itemId]?.status === "loading" && (
-                  <div className="flex flex-col items-center gap-2 py-16">
-                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
-                    <p className="text-sm text-slate-400">Generating refined image...</p>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+                  {images[refineTarget.itemId]?.status === "ready" && images[refineTarget.itemId]?.url && (
+                    <img className="max-h-[40vh] w-full rounded-xl object-contain" src={images[refineTarget.itemId]?.url} alt={refineTarget.title} />
+                  )}
+                  {images[refineTarget.itemId]?.status === "loading" && (
+                    <div className="flex flex-col items-center gap-2 py-16">
+                      <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                      <p className="text-sm text-slate-400">Generating refined image...</p>
+                    </div>
+                  )}
+                  {images[refineTarget.itemId]?.status === "error" && (
+                    <p className="py-16 text-sm text-rose-500">{images[refineTarget.itemId]?.error}</p>
+                  )}
+                </div>
+                {(images[refineTarget.itemId]?.history?.length ?? 0) > 1 && (
+                  <div className="flex items-center justify-center gap-3">
+                    <button type="button" disabled={refineLoading || (images[refineTarget.itemId]?.historyIndex ?? 0) <= 0}
+                      onClick={() => navigateImageVersion(refineTarget.itemId, "prev")}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                      &#8592; Prev
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      Version {(images[refineTarget.itemId]?.historyIndex ?? 0) + 1} of {images[refineTarget.itemId]?.history?.length ?? 0}
+                    </span>
+                    <button type="button" disabled={refineLoading || (images[refineTarget.itemId]?.historyIndex ?? 0) >= (images[refineTarget.itemId]?.history?.length ?? 1) - 1}
+                      onClick={() => navigateImageVersion(refineTarget.itemId, "next")}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                      Next &#8594;
+                    </button>
                   </div>
                 )}
-                {images[refineTarget.itemId]?.status === "error" && (
-                  <p className="py-16 text-sm text-rose-500">{images[refineTarget.itemId]?.error}</p>
+                {images[refineTarget.itemId]?.history?.[images[refineTarget.itemId]?.historyIndex ?? 0]?.refinementPrompt && (
+                  <p className="text-center text-xs italic text-slate-400 truncate">
+                    Refined: &ldquo;{images[refineTarget.itemId]?.history?.[images[refineTarget.itemId]?.historyIndex ?? 0]?.refinementPrompt}&rdquo;
+                  </p>
                 )}
               </div>
 
