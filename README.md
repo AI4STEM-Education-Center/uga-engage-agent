@@ -132,7 +132,9 @@ includes `sub`, `email`, `name`, `role`, `classId`, `className`,
 the appropriate view based on the `role` field.
 
 The `SSO_SECRET` is shared across all agents that connect to the Genius
-Platform — you do not need a separate secret per agent.
+Platform — you do not need a separate secret per agent. During a secret
+rotation, you can set `SSO_FALLBACK_SECRET` in the Engage Agent so it accepts
+both the current and previous shared secret while GENIUS catches up.
 
 ### Standalone test-login routes
 

@@ -1,15 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SignJWT } from "jose";
 import { POST } from "@/app/api/auth/verify/route";
 
 const TEST_SECRET = "test-sso-secret-for-testing";
+const FALLBACK_SECRET = "fallback-sso-secret-for-testing";
 const SECRET_BYTES = new TextEncoder().encode(TEST_SECRET);
+const FALLBACK_SECRET_BYTES = new TextEncoder().encode(FALLBACK_SECRET);
 
-beforeAll(() => {
+beforeEach(() => {
   vi.stubEnv("SSO_SECRET", TEST_SECRET);
 });
 
-afterAll(() => {
+afterEach(() => {
   vi.unstubAllEnvs();
 });
 
@@ -62,6 +64,30 @@ describe("POST /api/auth/verify", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
+  });
+
+  it("should verify a valid token signed with the fallback secret", async () => {
+    vi.stubEnv("SSO_FALLBACK_SECRET", FALLBACK_SECRET);
+
+    const token = await new SignJWT({
+      sub: "teacher-456",
+      email: "teacher@example.com",
+      name: "Fallback Teacher",
+      role: "teacher",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer("genius-learning-platform")
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(FALLBACK_SECRET_BYTES);
+
+    const req = new Request("http://localhost:3000/api/auth/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
   });
 
   it("should reject expired token", async () => {

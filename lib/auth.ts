@@ -38,19 +38,38 @@ export type SSOTokenInput = {
   taskId?: string;
 };
 
-const getSecret = () => {
+const SIGNATURE_ERROR_PATTERN = /signature verification failed/i;
+
+const encodeSecret = (raw: string) => new TextEncoder().encode(raw);
+
+const getSigningSecret = () => {
   const raw = process.env.SSO_SECRET;
   if (!raw) {
     throw new Error("SSO_SECRET environment variable is not set.");
   }
-  return new TextEncoder().encode(raw);
+  return encodeSecret(raw);
+};
+
+const getVerificationSecrets = () => {
+  const primary = process.env.SSO_SECRET;
+  if (!primary) {
+    throw new Error("SSO_SECRET environment variable is not set.");
+  }
+
+  const secrets = [primary];
+  const fallback = process.env.SSO_FALLBACK_SECRET;
+  if (fallback && fallback !== primary) {
+    secrets.push(fallback);
+  }
+
+  return secrets.map(encodeSecret);
 };
 
 export async function createSSOToken(
   payload: SSOTokenInput,
   options?: { expiresIn?: string | number | Date },
 ): Promise<string> {
-  const secret = getSecret();
+  const secret = getSigningSecret();
 
   return new SignJWT({
     sub: payload.sub,
@@ -70,11 +89,29 @@ export async function createSSOToken(
 }
 
 export async function verifySSOToken(token: string): Promise<UserContext> {
-  const secret = getSecret();
-  const { payload } = await jwtVerify(token, secret, {
-    issuer: SSO_ISSUER,
-    algorithms: ["HS256"],
-  });
+  const secrets = getVerificationSecrets();
+
+  let payload: JWTPayload | undefined;
+  let lastError: unknown;
+
+  for (const secret of secrets) {
+    try {
+      ({ payload } = await jwtVerify(token, secret, {
+        issuer: SSO_ISSUER,
+        algorithms: ["HS256"],
+      }));
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof Error) || !SIGNATURE_ERROR_PATTERN.test(error.message)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!payload) {
+    throw lastError instanceof Error ? lastError : new Error("Unable to verify SSO token.");
+  }
 
   const sso = payload as SSOPayload;
 

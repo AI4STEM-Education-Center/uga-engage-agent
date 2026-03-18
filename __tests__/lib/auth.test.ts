@@ -1,15 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SignJWT } from "jose";
 import { verifySSOToken, extractSSOToken } from "@/lib/auth";
 
 const TEST_SECRET = "test-sso-secret-for-testing";
+const FALLBACK_SECRET = "fallback-sso-secret-for-testing";
 const SECRET_BYTES = new TextEncoder().encode(TEST_SECRET);
+const FALLBACK_SECRET_BYTES = new TextEncoder().encode(FALLBACK_SECRET);
 
-beforeAll(() => {
+beforeEach(() => {
   vi.stubEnv("SSO_SECRET", TEST_SECRET);
 });
 
-afterAll(() => {
+afterEach(() => {
   vi.unstubAllEnvs();
 });
 
@@ -87,6 +89,26 @@ describe("verifySSOToken", () => {
       .sign(wrongSecret);
 
     await expect(verifySSOToken(token)).rejects.toThrow();
+  });
+
+  it("should verify a token with the fallback secret", async () => {
+    vi.stubEnv("SSO_FALLBACK_SECRET", FALLBACK_SECRET);
+
+    const token = await new SignJWT({
+      sub: "student-789",
+      email: "student@example.com",
+      name: "Fallback Student",
+      role: "student",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer("genius-learning-platform")
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(FALLBACK_SECRET_BYTES);
+
+    const user = await verifySSOToken(token);
+    expect(user.userId).toBe("student-789");
+    expect(user.role).toBe("student");
   });
 
   it("should reject a token with wrong issuer", async () => {
