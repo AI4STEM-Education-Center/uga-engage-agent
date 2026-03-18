@@ -146,6 +146,38 @@ describe("GET /api/content-publish", () => {
     });
   });
 
+  it("should fall back to embedded media stored with published content", async () => {
+    await POST(new Request("http://localhost:3000/api/content-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        classId: "c1",
+        assignmentId: "a1",
+        publishedBy: "teacher-1",
+        contentItems: [{
+          id: "item-1",
+          type: "material",
+          title: "Test",
+          body: "Body",
+          strategy: "analogy",
+          media: {
+            image: "https://example.com/fallback-image.webp",
+            video: "https://example.com/fallback-video.mp4",
+          },
+        }],
+      }),
+    }));
+
+    const req = new Request("http://localhost:3000/api/content-publish?classId=c1&assignmentId=a1");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.items[0].media).toEqual({
+      image: "https://example.com/fallback-image.webp",
+      video: "https://example.com/fallback-video.mp4",
+    });
+  });
+
   it("should return empty when nothing published", async () => {
     const req = new Request("http://localhost:3000/api/content-publish?classId=c1&assignmentId=a1");
     const res = await GET(req);

@@ -1,6 +1,34 @@
 import { NextResponse } from "next/server";
 import { upsertContentPublish, listMedia, listPublishedContent } from "@/lib/nosql";
 
+type SharedContentMedia = {
+  image?: string;
+  video?: string;
+};
+
+const extractEmbeddedMedia = (contentJson: string): SharedContentMedia | undefined => {
+  try {
+    const parsed = JSON.parse(contentJson) as { media?: { image?: unknown; video?: unknown } };
+    const embeddedMedia = parsed?.media;
+    if (!embeddedMedia || typeof embeddedMedia !== "object") {
+      return undefined;
+    }
+
+    const normalized = {
+      ...(typeof embeddedMedia.image === "string" && embeddedMedia.image
+        ? { image: embeddedMedia.image }
+        : {}),
+      ...(typeof embeddedMedia.video === "string" && embeddedMedia.video
+        ? { video: embeddedMedia.video }
+        : {}),
+    };
+
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get("classId");
@@ -39,12 +67,18 @@ export async function GET(request: Request) {
   }, {});
 
   return NextResponse.json({
-    items: items.map((item) => ({
-      ...item,
-      ...(mediaByItem[item.content_item_id]
-        ? { media: mediaByItem[item.content_item_id] }
-        : {}),
-    })),
+    items: items.map((item) => {
+      const embeddedMedia = extractEmbeddedMedia(item.content_json);
+      const mergedMedia = {
+        ...(embeddedMedia ?? {}),
+        ...(mediaByItem[item.content_item_id] ?? {}),
+      };
+
+      return {
+        ...item,
+        ...(Object.keys(mergedMedia).length > 0 ? { media: mergedMedia } : {}),
+      };
+    }),
   });
 }
 

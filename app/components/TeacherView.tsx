@@ -24,6 +24,15 @@ type Props = {
   user: UserContext;
 };
 
+type SharedContentMedia = {
+  image?: string;
+  video?: string;
+};
+
+type PublishableContentItem = ContentItem & {
+  media?: SharedContentMedia;
+};
+
 type PersistedDraft = {
   version: number;
   classId: string;
@@ -1109,7 +1118,24 @@ export default function TeacherView({ user }: Props) {
     if (selectedForPublish.size === 0 || !classId || !assignmentId) return;
     setPublishingContent(true);
     try {
-      const items = content.filter((c) => selectedForPublish.has(c.id));
+      const items: PublishableContentItem[] = content
+        .filter((item) => selectedForPublish.has(item.id))
+        .map((item) => {
+          const media: SharedContentMedia = {
+            ...(images[item.id]?.status === "ready" && images[item.id]?.url
+              ? { image: images[item.id]?.url }
+              : {}),
+            ...(videos[item.id]?.status === "ready" && videos[item.id]?.url
+              ? { video: videos[item.id]?.url }
+              : {}),
+          };
+
+          return {
+            ...item,
+            ...(Object.keys(media).length > 0 ? { media } : {}),
+          };
+        });
+
       const res = await fetch("/api/content-publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
