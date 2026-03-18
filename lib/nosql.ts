@@ -492,44 +492,48 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
 
     const s3 = getS3Client();
     if (s3 && s3Bucket) {
-      // Upload to S3; store only s3_key in DynamoDB (< 400KB)
-      const base64Match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
-      const body = base64Match
-        ? Buffer.from(base64Match[1], "base64")
-        : Buffer.from(dataUrl, "utf-8");
-      const ext = mediaExt(mimeType);
-      const s3Key = `media/${classId}/${assignmentId}/${studentId}/${contentItemId}_${mediaType}.${ext}`;
+      try {
+        // Upload to S3; store only s3_key in DynamoDB (< 400KB)
+        const base64Match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+        const body = base64Match
+          ? Buffer.from(base64Match[1], "base64")
+          : Buffer.from(dataUrl, "utf-8");
+        const ext = mediaExt(mimeType);
+        const s3Key = `media/${classId}/${assignmentId}/${studentId}/${contentItemId}_${mediaType}.${ext}`;
 
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: s3Bucket,
-          Key: s3Key,
-          Body: body,
-          ContentType: mimeType,
-        }),
-      );
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: s3Bucket,
+            Key: s3Key,
+            Body: body,
+            ContentType: mimeType,
+          }),
+        );
 
-      await client.send(
-        new PutCommand({
-          TableName: dynamoTableName,
-          Item: {
-            [pkField]: `CLASS#${classId}`,
-            [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
-            record_type: "media",
-            assignment_id: assignmentId,
-            [gsiStudentPkField]: `STUDENT#${studentId}`,
-            [gsiStudentSkField]: `MEDIA#ASSIGN#${assignmentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
-            media_id: mediaId,
-            content_item_id: contentItemId,
-            media_type: mediaType,
-            mime_type: mimeType,
-            s3_bucket: s3Bucket,
-            s3_key: s3Key,
-            created_at: createdAt,
-          },
-        }),
-      );
-      return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
+        await client.send(
+          new PutCommand({
+            TableName: dynamoTableName,
+            Item: {
+              [pkField]: `CLASS#${classId}`,
+              [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+              record_type: "media",
+              assignment_id: assignmentId,
+              [gsiStudentPkField]: `STUDENT#${studentId}`,
+              [gsiStudentSkField]: `MEDIA#ASSIGN#${assignmentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
+              media_id: mediaId,
+              content_item_id: contentItemId,
+              media_type: mediaType,
+              mime_type: mimeType,
+              s3_bucket: s3Bucket,
+              s3_key: s3Key,
+              created_at: createdAt,
+            },
+          }),
+        );
+        return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
+      } catch (error) {
+        console.error(`Failed to store ${mediaType} ${mediaId} in S3. Falling back to DynamoDB inline storage.`, error);
+      }
     }
 
     // No S3: only persist if under DynamoDB limit

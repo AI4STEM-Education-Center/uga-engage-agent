@@ -33,6 +33,35 @@ type PublishableContentItem = ContentItem & {
   media?: SharedContentMedia;
 };
 
+type PublishedContentPayloadItem = {
+  content_item_id?: string;
+  content_json?: string;
+  media?: SharedContentMedia;
+};
+
+const collectPublishedMedia = (
+  items: PublishedContentPayloadItem[] | undefined,
+  contentIds: Set<string>,
+) => {
+  const restoredImages: Record<string, ImageState> = {};
+  const restoredVideos: Record<string, VideoState> = {};
+
+  for (const item of items ?? []) {
+    const itemId = item.content_item_id;
+    if (!itemId || !contentIds.has(itemId) || !item.media) continue;
+
+    if (item.media.image) {
+      restoredImages[itemId] = { status: "ready", url: item.media.image };
+    }
+    if (item.media.video) {
+      restoredVideos[itemId] = { status: "ready", url: item.media.video };
+    }
+  }
+
+  return { restoredImages, restoredVideos };
+};
+
+
 type PersistedDraft = {
   version: number;
   classId: string;
@@ -605,8 +634,11 @@ export default function TeacherView({ user }: Props) {
 
         if (publishRes.ok) {
           const publishData = (await publishRes.json()) as {
-            items?: Array<{ content_item_id?: string }>;
+            items?: PublishedContentPayloadItem[];
           };
+          const publishedMedia = collectPublishedMedia(publishData.items, contentIds);
+          setImages((prev) => ({ ...prev, ...publishedMedia.restoredImages }));
+          setVideos((prev) => ({ ...prev, ...publishedMedia.restoredVideos }));
           setPublishedContentIds(
             new Set(
               (publishData.items ?? [])
@@ -651,10 +683,7 @@ export default function TeacherView({ user }: Props) {
         }
 
         const publishData = (await publishRes.json()) as {
-          items?: Array<{
-            content_item_id?: string;
-            content_json?: string;
-          }>;
+          items?: PublishedContentPayloadItem[];
         };
 
         if (cancelled) return;
@@ -685,8 +714,13 @@ export default function TeacherView({ user }: Props) {
 
         if (cancelled) return;
 
-        const restoredImages: Record<string, ImageState> = {};
-        const restoredVideos: Record<string, VideoState> = {};
+        const publishedMedia = collectPublishedMedia(publishData.items, contentIds);
+        const restoredImages: Record<string, ImageState> = {
+          ...publishedMedia.restoredImages,
+        };
+        const restoredVideos: Record<string, VideoState> = {
+          ...publishedMedia.restoredVideos,
+        };
 
         if (mediaRes.ok) {
           const mediaData = (await mediaRes.json()) as {
