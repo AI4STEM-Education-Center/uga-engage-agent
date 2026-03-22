@@ -16,15 +16,15 @@
       "stem": "A steel ball hits a thick steel plate and bounces. Afterward, the plate looks exactly the same as before. During the moment of collision, did the steel plate deform at all?",
       "options": {
         "A": "No, steel is too hard to deform.",
-        "B": "No, if it deformed, we would definitely see a dent.",
-        "C": "Yes, the plate deformed a tiny amount during the collision, even if we cannot see it afterward.",
-        "D": "Yes, but only the ball deformed; the plate did not."
+        "B": "Yes, but only the ball deformed; the plate did not.",
+        "C": "No, if it deformed, we would definitely see a dent.",
+        "D": "Yes, the plate deformed a tiny amount during the collision, even if we cannot see it afterward."
       },
-      "correct_answer": "C",
+      "correct_answer": "D",
       "matched_misconception": "a",
       "distractor_misconception_map": {
         "A": "a",
-        "B": "a"
+        "C": "a"
       }
     },
     {
@@ -44,16 +44,16 @@
       "question_number": 2,
       "stem": "High-speed video shows a golf club hitting a golf ball. The ball looks flattened for a split second, then returns to its original shape. What is the best conclusion?",
       "options": {
-        "A": "The ball was damaged because it changed shape.",
-        "B": "The ball's shape change was temporary.",
-        "C": "Solid objects do not change shape when hit.",
-        "D": "The ball flattened on its own because it is soft."
+        "A": "The ball's shape change was temporary.",
+        "B": "Solid objects do not change shape when hit.",
+        "C": "The ball flattened on its own because it is soft.",
+        "D": "The ball was damaged because it changed shape."
       },
-      "correct_answer": "B",
+      "correct_answer": "A",
       "matched_misconception": "a",
       "distractor_misconception_map": {
-        "A": "a",
-        "C": "a"
+        "B": "a",
+        "D": "a"
       }
     },
     {
@@ -73,15 +73,15 @@
       "question_number": 3,
       "stem": "Two balls are the same material. One has twice the diameter of the other. You press each ball into soft clay with the same downward force. Which is most likely?",
       "options": {
-        "A": "Both make the same dent because the force is the same.",
-        "B": "The smaller ball makes a deeper dent because the contact area is smaller.",
+        "A": "Neither makes a dent because the balls are solid.",
+        "B": "Both make the same dent because the force is the same.",
         "C": "The larger ball makes a deeper dent because it has more surface area.",
-        "D": "Neither makes a dent because the balls are solid."
+        "D": "The smaller ball makes a deeper dent because the contact area is smaller."
       },
-      "correct_answer": "B",
+      "correct_answer": "D",
       "matched_misconception": "b",
       "distractor_misconception_map": {
-        "A": "b"
+        "B": "b"
       }
     },
     {
@@ -100,16 +100,17 @@
       "type": "multiple_choice",
       "question_number": 4,
       "stem": "You press a nail into a block of soft wood with the same downward force two times. Trial 1: you press using the flat head of the nail. Trial 2: you press using the sharp tip of the nail. Which is most likely?",
+      "image": "images/L3_Q4.png",
       "options": {
-        "A": "Both make the same dent because the force is the same.",
-        "B": "The sharp tip makes a deeper dent because the same force is applied over a smaller contact area.",
-        "C": "The flat head makes a deeper dent because it touches more wood.",
-        "D": "Neither makes a dent because the nail is solid."
+        "A": "Neither makes a dent because the nail is solid.",
+        "B": "Both make the same dent because the force is the same.",
+        "C": "The sharp tip makes a deeper dent because the same force is applied over a smaller contact area.",
+        "D": "The flat head makes a deeper dent because it touches more wood at once, so it pushes a larger area downward."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "b",
       "distractor_misconception_map": {
-        "A": "b"
+        "B": "b"
       }
     },
     {

@@ -13,17 +13,18 @@
       "type": "multiple_choice",
       "question_number": 1,
       "stem": "Two soccer players collide head-to-head. Player 1 is bigger and faster. Which statement is best about the forces during the collision?",
+      "image": "images/L6_Q1.png",
       "options": {
-        "A": "Player 1 exerts more force on Player 2.",
-        "B": "Player 2 exerts more force on Player 1.",
-        "C": "Both exert equal forces on each other.",
-        "D": "Only the faster player exerts force."
+        "A": "Only the faster player exerts force.",
+        "B": "Both exert equal forces on each other.",
+        "C": "Player 1 exerts more force on Player 2.",
+        "D": "Player 2 exerts more force on Player 1."
       },
-      "correct_answer": "C",
+      "correct_answer": "B",
       "matched_misconception": "1",
       "distractor_misconception_map": {
-        "A": "1",
-        "D": "1"
+        "C": "1",
+        "A": "1"
       }
     },
     {
@@ -44,11 +45,11 @@
       "stem": "The same soccer ball hits the same metal goalpost in two trials. In Trial 1, the ball is moving slowly. In Trial 2, the ball is moving much faster. In which trial will the ball flatten more during the impact?",
       "options": {
         "A": "Trial 1, because slower collisions cause more flattening.",
-        "B": "Trial 2, because a faster-moving ball has more kinetic energy at impact.",
-        "C": "Same, because the metal goalpost the ball hit is the same in both trials.",
+        "B": "Same, because the metal goalpost the ball hit is the same in both trials.",
+        "C": "Trial 2, because a faster-moving ball has more kinetic energy at impact.",
         "D": "The ball's weight matters most, so it should flatten about the same in both trials."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "1",
       "distractor_misconception_map": {
         "D": "1"
@@ -72,15 +73,15 @@
       "stem": "A fast skater (Player A) bumps into a slower skater (Player B). During the brief contact, how do the forces compare?",
       "options": {
         "A": "Player A exerts a larger force because A is faster.",
-        "B": "Player B exerts a larger force because B is slower.",
-        "C": "They exert equal forces on each other in opposite directions.",
-        "D": "Only Player A exerts a force because A is moving."
+        "B": "Only Player A exerts a force because A is moving.",
+        "C": "Player B exerts a larger force because B is slower.",
+        "D": "They exert equal forces on each other in opposite directions."
       },
-      "correct_answer": "C",
+      "correct_answer": "D",
       "matched_misconception": "1",
       "distractor_misconception_map": {
         "A": "1",
-        "D": "1"
+        "B": "1"
       }
     },
     {
@@ -101,16 +102,16 @@
       "stem": "A larger football player and a smaller football player collide. The smaller player's speed changes more after the collision. What is the best explanation?",
       "options": {
         "A": "The larger player exerted a larger force on the smaller player.",
-        "B": "The forces were equal in size, but the smaller player's motion changed more because of differences in mass.",
-        "C": "The smaller player exerted no force because they were smaller.",
-        "D": "The larger player felt no force because they kept moving forward."
+        "B": "The smaller player exerted no force because they were smaller.",
+        "C": "The larger player felt no force because they kept moving forward.",
+        "D": "The forces were equal in size, but the smaller player's motion changed more because of differences in mass."
       },
-      "correct_answer": "B",
+      "correct_answer": "D",
       "matched_misconception": "1",
       "distractor_misconception_map": {
         "A": "1",
-        "C": "1",
-        "D": "1"
+        "B": "1",
+        "C": "1"
       }
     },
     {

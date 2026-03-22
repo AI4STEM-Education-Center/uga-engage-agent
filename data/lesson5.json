@@ -23,15 +23,15 @@
       "question_number": 1,
       "stem": "A large delivery truck collides with a small mosquito. During the brief time they are in contact, how do the forces they exert on each other compare?",
       "options": {
-        "A": "The truck exerts a stronger force on the mosquito.",
-        "B": "The mosquito exerts a stronger force on the truck.",
-        "C": "They exert forces of equal strength on each other.",
+        "A": "They exert forces of equal strength on each other.",
+        "B": "The truck exerts a stronger force on the mosquito.",
+        "C": "The mosquito exerts a stronger force on the truck.",
         "D": "Neither exerts a force because the mosquito is too small."
       },
-      "correct_answer": "C",
+      "correct_answer": "A",
       "matched_misconception": "1-a, 2-a, 1-d",
       "distractor_misconception_map": {
-        "A": "1-a, 2-a",
+        "B": "1-a, 2-a",
         "D": "1-d"
       }
     },
@@ -52,16 +52,16 @@
       "question_number": 2,
       "stem": "A soccer player (Player A) collides with a stationary player (Player B). In a second trial, Player A runs twice as fast before hitting Player B. In both trials, the collision lasts for the same amount of time. Which statement best explains the forces involved?",
       "options": {
-        "A": "The peak force is smaller in the second collision because faster motion reduces contact time.",
-        "B": "The peak force is larger in the second collision because Player A has more kinetic energy.",
-        "C": "The peak force is the same in both collisions because Player B is standing still.",
-        "D": "Player A exerts a larger force than Player B in the second collision."
+        "A": "Player A exerts a larger force than Player B in the second collision.",
+        "B": "The peak force is the same in both collisions because Player B is standing still.",
+        "C": "The peak force is larger in the second collision because Player A has more kinetic energy.",
+        "D": "The peak force is smaller in the second collision because faster motion reduces contact time."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "1-b, 1-d",
       "distractor_misconception_map": {
-        "C": "1-d",
-        "D": "1-b"
+        "B": "1-d",
+        "A": "1-b"
       }
     },
     {
@@ -80,17 +80,18 @@
       "type": "multiple_choice",
       "question_number": 3,
       "stem": "Two students stand on skateboards facing each other. Student A pushes on Student B's hands to start B rolling away. While their hands are in contact, how do the forces compare?",
+      "image": "images/L5_Q3.png",
       "options": {
-        "A": "Student A exerts a larger force because A is the one doing the pushing.",
+        "A": "Student B exerts no force because B is passive.",
         "B": "Student B exerts a larger force because B is being pushed backward.",
-        "C": "They exert forces of equal strength on each other in opposite directions.",
-        "D": "Student B exerts no force because B is passive."
+        "C": "Student A exerts a larger force because A is the one doing the pushing.",
+        "D": "They exert forces of equal strength on each other in opposite directions."
       },
-      "correct_answer": "C",
+      "correct_answer": "D",
       "matched_misconception": "1-c",
       "distractor_misconception_map": {
         "A": "1-c",
-        "D": "1-c"
+        "C": "1-c"
       }
     },
     {
@@ -110,16 +111,16 @@
       "question_number": 4,
       "stem": "A moving hockey puck hits a stationary puck of the same mass in a very brief collision. The moving puck has more kinetic energy before impact. During the collision, how do the peak forces on the two pucks compare?",
       "options": {
-        "A": "The moving puck exerts a larger peak force because it has more kinetic energy.",
+        "A": "The peak forces are equal in strength on both pucks.",
         "B": "The stationary puck exerts a larger peak force because it is not moving.",
-        "C": "The peak forces are equal in strength on both pucks.",
-        "D": "Only the moving puck exerts a force because the other puck is stationary."
+        "C": "Only the moving puck exerts a force because the other puck is stationary.",
+        "D": "The moving puck exerts a larger peak force because it has more kinetic energy."
       },
-      "correct_answer": "C",
+      "correct_answer": "A",
       "matched_misconception": "4-a, 1-d",
       "distractor_misconception_map": {
-        "A": "4-a",
-        "D": "1-d"
+        "D": "4-a",
+        "C": "1-d"
       }
     },
     {

@@ -21,6 +21,7 @@
       "type": "multiple_choice",
       "question_number": 1,
       "stem": "A plastic spoon is bent. At first it springs back. If bent farther, it stays bent. If bent even farther, it snaps. Which statement best matches the terms?",
+      "image": "images/L4_Q1.png",
       "options": {
         "A": "The elastic limit is when it snaps.",
         "B": "The breaking point is when it first bends.",
@@ -51,16 +52,16 @@
       "question_number": 2,
       "stem": "Two rulers are the same length but made of different materials. You push down on the center of each ruler with the same force and then let go. Ruler A springs back. Ruler B stays slightly bent. Which conclusion is best?",
       "options": {
-        "A": "Ruler B did not deform because the force was not strong enough.",
-        "B": "The same force pushed Ruler B past its elastic limit, so it deformed permanently.",
-        "C": "Elastic limit is the amount of force you used, so both rulers have the same elastic limit.",
-        "D": "Both reached their elastic limit."
+        "A": "Both reached their elastic limit.",
+        "B": "Ruler B did not deform because the force was not strong enough.",
+        "C": "The same force pushed Ruler B past its elastic limit, so it deformed permanently.",
+        "D": "Elastic limit is the amount of force you used, so both rulers have the same elastic limit."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "4-a, 2-a",
       "distractor_misconception_map": {
-        "A": "4-a",
-        "C": "2-a"
+        "B": "4-a",
+        "D": "2-a"
       }
     },
     {
@@ -81,15 +82,15 @@
       "stem": "You push on a thick wooden table with your finger. The table does not appear to move or change shape. Which statement is scientifically accurate?",
       "options": {
         "A": "No deformation occurred because the table looks exactly the same as before.",
-        "B": "The table deformed elastically, even if the change was too small for your eyes to see.",
-        "C": "Deformation only begins once the force is strong enough to leave a permanent dent.",
+        "B": "Deformation only begins once the force is strong enough to leave a permanent dent.",
+        "C": "The table deformed elastically, even if the change was too small for your eyes to see.",
         "D": "Solid objects like wood are too hard to deform unless they reach their breaking point."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "1-a",
       "distractor_misconception_map": {
         "A": "1-a",
-        "C": "4-a",
+        "B": "4-a",
         "D": "4-a"
       }
     },
@@ -110,16 +111,16 @@
       "question_number": 4,
       "stem": "Two beams are made of the same plastic. Beam X is twice as thick as Beam Y. If you apply the same amount of force to both, which will happen?",
       "options": {
-        "A": "Both deform the same because the same force is applied.",
-        "B": "Beam X deforms more because the same force is applied over a smaller contact area.",
-        "C": "Beam Y deforms more because it is thinner.",
-        "D": "Neither deforms unless the force is large enough to crack the plastic."
+        "A": "Beam Y deforms more because it is thinner.",
+        "B": "Both deform the same because the same force is applied.",
+        "C": "Neither deforms unless the force is large enough to crack the plastic.",
+        "D": "Beam X deforms more because the same force is applied over a smaller contact area."
       },
-      "correct_answer": "C",
+      "correct_answer": "A",
       "matched_misconception": "1-b, 4-a",
       "distractor_misconception_map": {
-        "A": "1-b",
-        "D": "4-a"
+        "B": "1-b",
+        "C": "4-a"
       }
     },
     {
