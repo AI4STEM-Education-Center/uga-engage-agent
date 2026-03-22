@@ -15,16 +15,17 @@
       "type": "multiple_choice",
       "question_number": 1,
       "stem": "A phone drops onto a soft pillow. The phone looks the same afterward. Which statement best describes the collision?",
+      "image": "images/L1_Q1.png",
       "options": {
-        "A": "The force was weak because nothing was damaged.",
-        "B": "The phone and pillow pushed on each other.",
-        "C": "Soft objects cannot exert forces.",
-        "D": "Only the phone pushed; the pillow did not."
+        "A": "Soft objects cannot exert forces.",
+        "B": "Only the phone pushed; the pillow did not.",
+        "C": "The phone and pillow pushed on each other.",
+        "D": "The force was weak because nothing was damaged."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "a",
       "distractor_misconception_map": {
-        "A": "a"
+        "D": "a"
       }
     },
     {
@@ -44,15 +45,15 @@
       "question_number": 2,
       "stem": "A bug hits a car windshield while the car is moving on the highway. The windshield looks the same afterward. Which statement best describes the collision?",
       "options": {
-        "A": "The force must have been weak because the windshield was not damaged.",
-        "B": "The bug and the windshield pushed on each other during contact.",
+        "A": "The bug and the windshield pushed on each other during contact.",
+        "B": "There was no collision because the windshield did not change shape.",
         "C": "The windshield exerted a force, but the bug did not because it is small.",
-        "D": "There was no collision because the windshield did not change shape."
+        "D": "The force must have been weak because the windshield was not damaged."
       },
-      "correct_answer": "B",
+      "correct_answer": "A",
       "matched_misconception": "a",
       "distractor_misconception_map": {
-        "A": "a"
+        "D": "a"
       }
     },
     {
@@ -70,17 +71,18 @@
       "item_id": "L1_Q3",
       "type": "multiple_choice",
       "question_number": 3,
-      "stem": "A heavy bowling ball hits a window very slowly. A light golf ball hits the same window very fast. The bowling ball does not break the window, but the golf ball broke the window. Which statement best explains it?",
+      "stem": "A heavy bowling ball hits a window very slowly. A light golf ball hits the same window very fast. The bowling ball does not break the window, but the golf ball broke the window. Which statement best explain it?",
+      "image": "images/L1_Q3.png",
       "options": {
-        "A": "Heavier objects always cause more damage.",
-        "B": "Speed can matter as well as mass.",
+        "A": "Speed can matter as well as mass.",
+        "B": "Smaller objects have stronger gravity.",
         "C": "The window must have been defective.",
-        "D": "Smaller objects have stronger gravity."
+        "D": "Heavier objects always cause more damage."
       },
-      "correct_answer": "B",
+      "correct_answer": "A",
       "matched_misconception": "b",
       "distractor_misconception_map": {
-        "A": "b"
+        "D": "b"
       }
     },
     {
@@ -98,14 +100,15 @@
       "item_id": "L1_Q4",
       "type": "multiple_choice",
       "question_number": 4,
-      "stem": "A large truck and a small compact car collide head on. The car is badly crumpled, but the truck shows much less damage. Which statement best explains why the damage differs?",
+      "stem": "A large truck and a small compact car collide head-on. The car is badly crumpled, but the truck shows much less damage. Which statement best explains why the damage differs?",
+      "image": "images/L1_Q4.png",
       "options": {
         "A": "The truck must have exerted a much larger force to the car.",
-        "B": "Damage depends on factors such as materials and design of each object, not only mass.",
-        "C": "The car was damaged because it exerted no force on the truck.",
-        "D": "The truck was less damaged because smaller objects have less gravity."
+        "B": "The car was damaged because it exerted no force on the truck.",
+        "C": "The truck was less damaged because smaller objects have less gravity.",
+        "D": "Damage depends on factors such as materials and design of each object, not only mass."
       },
-      "correct_answer": "B",
+      "correct_answer": "D",
       "matched_misconception": "b",
       "distractor_misconception_map": {
         "A": "b"

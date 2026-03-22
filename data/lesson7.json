@@ -19,10 +19,10 @@
       "question_number": 1,
       "stem": "Car A and Car B have the same mass. Car B is moving twice as fast as Car A. How does the kinetic energy of Car B compare to Car A?",
       "options": {
-        "A": "The same as Car A",
+        "A": "Half of Car A",
         "B": "Two times Car A",
         "C": "Four times Car A",
-        "D": "Half of Car A"
+        "D": "The same as Car A"
       },
       "correct_answer": "C",
       "matched_misconception": "b",
@@ -46,17 +46,18 @@
       "type": "multiple_choice",
       "question_number": 2,
       "stem": "Cart A has mass 2 kg and moves at 2 m/s. Cart B has mass 1 kg and moves at 4 m/s. Which cart has more kinetic energy?",
+      "image": "images/L7_Q2.png",
       "options": {
         "A": "Cart A, because it has more mass.",
         "B": "Cart B, because it is moving faster.",
-        "C": "They have the same kinetic energy because one has double the mass and the other has double the speed.",
-        "D": "You can't tell without knowing how far each cart travels."
+        "C": "You can't tell without knowing how far each cart travels.",
+        "D": "They have the same kinetic energy because one has double the mass and the other has double the speed."
       },
       "correct_answer": "B",
       "matched_misconception": "a, b",
       "distractor_misconception_map": {
         "A": "a",
-        "C": "b"
+        "D": "b"
       }
     },
     {
@@ -76,16 +77,16 @@
       "question_number": 3,
       "stem": "Two carts move toward identical foam barriers. Both carts have the same momentum, but Cart A is heavier and moving slower, while Cart B is lighter and moving faster. Which statement is most accurate?",
       "options": {
-        "A": "They have the same kinetic energy because their momentum is the same.",
-        "B": "Cart B has more kinetic energy because higher speed increases kinetic energy more than mass does.",
-        "C": "Cart A has more kinetic energy because it has more mass.",
-        "D": "You cannot compare kinetic energy unless you know the stopping time."
+        "A": "Cart A has more kinetic energy because it has more mass.",
+        "B": "You cannot compare kinetic energy unless you know the stopping time.",
+        "C": "They have the same kinetic energy because their momentum is the same.",
+        "D": "Cart B has more kinetic energy because higher speed increases kinetic energy more than mass does."
       },
-      "correct_answer": "B",
+      "correct_answer": "D",
       "matched_misconception": "c",
       "distractor_misconception_map": {
-        "A": "c",
-        "C": "a"
+        "C": "c",
+        "A": "a"
       }
     },
     {
@@ -105,16 +106,16 @@
       "question_number": 4,
       "stem": "A puck glides across very smooth ice at a nearly constant speed for several seconds. Which statement best describes what happens to the puck's kinetic energy while it keeps moving at the same speed?",
       "options": {
-        "A": "It decreases because the puck uses up its kinetic energy to keep moving.",
+        "A": "It becomes momentum, so kinetic energy is gone.",
         "B": "It stays about the same because its speed stays about the same.",
         "C": "It increases because moving objects build up kinetic energy over time.",
-        "D": "It becomes momentum, so kinetic energy is gone."
+        "D": "It decreases because the puck uses up its kinetic energy to keep moving."
       },
       "correct_answer": "B",
       "matched_misconception": "d, c",
       "distractor_misconception_map": {
-        "A": "d",
-        "D": "c"
+        "D": "d",
+        "A": "c"
       }
     },
     {

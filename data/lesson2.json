@@ -19,18 +19,19 @@
       "item_id": "L2_Q1",
       "type": "multiple_choice",
       "question_number": 1,
-      "stem": "A cart bumps a box at rest on ice. After the bump, the box moves forward at nearly constant speed. Which statement best explains this?",
+      "stem": "A cart bumps a box at rest on ice. After the bump, the box moves forward at nearly constant speed. Which statement best describes the forces on the box while it is sliding?",
+      "image": "images/L2_Q1.png",
       "options": {
-        "A": "The box must have a forward force on it to keep moving.",
-        "B": "Forces on the box can be balanced while it keeps moving.",
-        "C": "Balanced forces mean the box must be at rest, so it cannot be moving.",
-        "D": "Gravity makes the box move forward after the bump."
+        "A": "Gravity makes the box move forward after the bump.",
+        "B": "The box must have a forward force on it to keep moving.",
+        "C": "Forces on the box can be balanced while it keeps moving.",
+        "D": "Balanced forces mean the box must be at rest, so it cannot be moving."
       },
-      "correct_answer": "B",
+      "correct_answer": "C",
       "matched_misconception": "1-a, 1-b",
       "distractor_misconception_map": {
-        "A": "1-a",
-        "C": "1-b"
+        "B": "1-a",
+        "D": "1-b"
       }
     },
     {
@@ -51,15 +52,15 @@
       "stem": "A moving lump of clay hits a block and sticks to it. After the collision, the clay and block are no longer moving. Where did the clay's kinetic energy go?",
       "options": {
         "A": "It vanished when the objects stopped moving.",
-        "B": "It was transferred to the clay, block, and surroundings, such as warming up and sound during the collision.",
-        "C": "It disappeared because the clay changed shape permanently.",
-        "D": "It stayed as kinetic energy in the clay and block even though they are not moving."
+        "B": "It disappeared because the clay changed shape permanently.",
+        "C": "It stayed as kinetic energy in the clay and block even though they are not moving.",
+        "D": "It was transferred to the clay, block, and surroundings, such as warming up and sound during the collision."
       },
-      "correct_answer": "B",
+      "correct_answer": "D",
       "matched_misconception": "3-a",
       "distractor_misconception_map": {
         "A": "3-a",
-        "C": "3-a"
+        "B": "3-a"
       }
     },
     {
@@ -79,15 +80,15 @@
       "question_number": 3,
       "stem": "A cart is pulled on a low-friction track. The spring scale reading stays the same, and the cart speeds up. What does this show?",
       "options": {
-        "A": "The pull force must be increasing because the cart is speeding up.",
+        "A": "A force is only needed to start the cart, not to speed it up.",
         "B": "The pull force can stay the same while the cart's motion changes.",
-        "C": "The pull force must be decreasing because the cart is getting faster.",
-        "D": "A force is only needed to start the cart, not to speed it up."
+        "C": "The pull force must be increasing because the cart is speeding up.",
+        "D": "The pull force must be decreasing because the cart is getting faster."
       },
       "correct_answer": "B",
       "matched_misconception": "2-a",
       "distractor_misconception_map": {
-        "A": "2-a"
+        "C": "2-a"
       }
     },
     {
@@ -107,15 +108,15 @@
       "question_number": 4,
       "stem": "On a nearly frictionless track, a moving cart hits a cart at rest and they stick together. Which statement about the two-cart system is best?",
       "options": {
-        "A": "Both the total momentum and the total kinetic energy of the system are conserved.",
-        "B": "The total momentum of the system is conserved, but the total kinetic energy of the system decreases.",
-        "C": "Total kinetic energy is conserved, but momentum is not because the carts stick.",
-        "D": "Neither momentum nor kinetic energy is conserved because the carts stick."
+        "A": "Neither momentum nor kinetic energy is conserved because the carts stick.",
+        "B": "Total kinetic energy is conserved, but momentum is not because the carts stick.",
+        "C": "Both the total momentum and the total kinetic energy of the system are conserved.",
+        "D": "The total momentum of the system is conserved, but the total kinetic energy of the system decreases."
       },
-      "correct_answer": "B",
+      "correct_answer": "D",
       "matched_misconception": "3-b",
       "distractor_misconception_map": {
-        "A": "3-b",
+        "B": "3-b",
         "C": "3-b"
       }
     },

@@ -21,6 +21,7 @@
       "type": "multiple_choice",
       "question_number": 1,
       "stem": "A cart is launched by the same spring. Trial 1 compresses the spring 2 cm. Trial 2 compresses it 5 cm. Which trial gives the cart more kinetic energy right after launch?",
+      "image": "images/L8_Q1.png",
       "options": {
         "A": "Trial 1",
         "B": "Trial 2",
@@ -50,16 +51,16 @@
       "question_number": 2,
       "stem": "Two carts start from rest on the same low-friction track. You push each cart with the same constant force for the same amount of time. Cart A has a smaller mass than Cart B. Which statement is most accurate?",
       "options": {
-        "A": "Both carts reach the same speed because the force is the same.",
-        "B": "The heavier cart speeds up more because it has more mass.",
-        "C": "The lighter cart speeds up more because the same force changes its motion more.",
-        "D": "The cart that ends up moving faster must have had a larger force."
+        "A": "The heavier cart speeds up more because it has more mass.",
+        "B": "Both carts reach the same speed because the force is the same.",
+        "C": "The cart that ends up moving faster must have had a larger force.",
+        "D": "The lighter cart speeds up more because the same force changes its motion more."
       },
-      "correct_answer": "C",
+      "correct_answer": "D",
       "matched_misconception": "1&2-a, 1&2-b",
       "distractor_misconception_map": {
-        "A": "1&2-a",
-        "D": "1&2-b"
+        "B": "1&2-a",
+        "C": "1&2-b"
       }
     },
     {
@@ -79,8 +80,8 @@
       "question_number": 3,
       "stem": "A cart is launched from a spring and is now rolling across a flat low-friction track. The spring is no longer touching the cart. Which statement best describes the horizontal forces acting on the cart while it is coasting?",
       "options": {
-        "A": "There is a constant forward force from the spring that keeps the cart moving.",
-        "B": "The forward force of the launch is still \"inside\" the cart, pushing it forward.",
+        "A": "The forward force of the launch is still \"inside\" the cart, pushing it forward.",
+        "B": "There is a constant forward force from the spring that keeps the cart moving.",
         "C": "There are no horizontal forces acting on the cart, so it continues at a constant speed.",
         "D": "The force of the launch must be greater than the force of the air for the cart to keep moving."
       },
