@@ -27,6 +27,9 @@ type Plan = {
 };
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const STRATEGY_REQUEST_TIMEOUT_MS = 25_000;
 
 const buildPrompt = (student: Student) => ({
   system: `You are an education engagement planner.
@@ -102,7 +105,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: STRATEGY_REQUEST_TIMEOUT_MS,
+      maxRetries: 0,
+    });
     const {
       students = [],
       classId,
@@ -169,9 +176,18 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ results, distribution });
   } catch (error) {
+    const isUpstreamTimeout =
+      error instanceof Error && error.name === "APIConnectionTimeoutError";
     const message =
-      error instanceof Error ? error.message : "Failed to analyze students.";
-    console.error("strategy-batch error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+      isUpstreamTimeout
+        ? "Strategy generation timed out before the model returned."
+        : error instanceof Error
+          ? error.message
+          : "Failed to analyze students.";
+    console.error("strategy-batch error:", message, error);
+    return NextResponse.json(
+      { error: message },
+      { status: isUpstreamTimeout ? 504 : 500 },
+    );
   }
 }

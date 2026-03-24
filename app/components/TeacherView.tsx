@@ -163,6 +163,44 @@ const CONTENT_TEXT_MODE_LABELS: Record<TextMode, string> = {
 const isTextModeValue = (value: string): value is TextMode =>
   value === "questions" || value === "phenomenon" || value === "dialogue";
 
+const parseJsonResponse = async <T,>(response: Response): Promise<T | null> => {
+  const text = await response.text();
+  if (!text.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+};
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const formatStrategyRequestError = (
+  studentName: string,
+  status: number,
+  message?: string,
+) => {
+  if (message) {
+    return message;
+  }
+
+  if (status === 504) {
+    return `Timed out analyzing ${studentName}. The server did not finish before the gateway timeout. Try again; cached students will be reused.`;
+  }
+
+  if (status === 502 || status === 503) {
+    return `The server was temporarily unavailable while analyzing ${studentName}. Try again.`;
+  }
+
+  return `Failed to analyze ${studentName} (HTTP ${status}).`;
+};
+
 const getContentModeLabels = (item: ContentItem) => {
   if (item.textModes && item.textModes.length > 0) {
     return item.textModes.map((mode) => CONTENT_TEXT_MODE_LABELS[mode] ?? mode);
@@ -1032,14 +1070,49 @@ export default function TeacherView({ user }: Props) {
           total: studentsForApi.length,
           currentName: `Generating ${student.name}...`,
         });
-        const res = await fetch("/api/strategy-single", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student, classId, assignmentId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error ?? `Failed to analyze ${student.name}.`);
-        results.push({ id: student.id, name: student.name, plan: data.plan });
+        let plan: Plan | null = null;
+
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          const res = await fetch("/api/strategy-single", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ student, classId, assignmentId }),
+          });
+          const data = await parseJsonResponse<{ error?: string; plan?: Plan }>(res);
+
+          if (res.ok && data?.plan) {
+            plan = data.plan;
+            break;
+          }
+
+          const isRetryable =
+            res.status === 502 || res.status === 503 || res.status === 504;
+          if (isRetryable && attempt < 2) {
+            setCohortProgress({
+              processed: index,
+              total: studentsForApi.length,
+              currentName: `Retrying ${student.name} after HTTP ${res.status}...`,
+            });
+            await delay(1000 * attempt);
+            continue;
+          }
+
+          if (!res.ok) {
+            throw new Error(
+              formatStrategyRequestError(student.name, res.status, data?.error),
+            );
+          }
+
+          throw new Error(
+            `Failed to analyze ${student.name}. The server returned an invalid response.`,
+          );
+        }
+
+        if (!plan) {
+          throw new Error(`Failed to analyze ${student.name}.`);
+        }
+
+        results.push({ id: student.id, name: student.name, plan });
         setCohortResults([...results]);
       }
 
