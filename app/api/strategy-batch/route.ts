@@ -26,6 +26,18 @@ type Plan = {
   checks: string[];
 };
 
+type StudentStrategyResult = {
+  id: string;
+  name: string;
+  plan: Plan;
+};
+
+type StudentStrategyError = {
+  id: string;
+  name: string;
+  error: string;
+};
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -96,6 +108,68 @@ const ensurePlanFields = (plan: Plan) => {
   return plan;
 };
 
+const isTimeoutError = (error: unknown) =>
+  error instanceof Error && error.name === "APIConnectionTimeoutError";
+
+const buildStudentError = (student: Student, error: unknown): StudentStrategyError => ({
+  id: student.id,
+  name: student.name,
+  error: isTimeoutError(error)
+    ? "Strategy generation timed out before the model returned."
+    : error instanceof Error
+      ? error.message
+      : `Failed to analyze ${student.name}.`,
+});
+
+const generatePlanForStudent = async ({
+  client,
+  model,
+  classKey,
+  assignmentKey,
+  student,
+}: {
+  client: OpenAI;
+  model: string;
+  classKey: string;
+  assignmentKey: string;
+  student: Student;
+}): Promise<StudentStrategyResult> => {
+  const cachedPlanJson = await getCachedPlanJson(
+    classKey,
+    assignmentKey,
+    student.id,
+  );
+  if (cachedPlanJson) {
+    const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
+    cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
+    const plan = ensurePlanFields(cachedPlan);
+    return { id: student.id, name: student.name, plan };
+  }
+
+  const prompt = buildPrompt(student);
+  const completion = await client.chat.completions.create({
+    model,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
+  });
+
+  const parsedPlan = parseJson(completion.choices[0]?.message?.content);
+  parsedPlan.strategy = normalizeStrategy(parsedPlan.strategy);
+  const plan = ensurePlanFields(parsedPlan);
+
+  await upsertCachedPlanJson(
+    classKey,
+    assignmentKey,
+    student.id,
+    JSON.stringify(plan),
+  );
+
+  return { id: student.id, name: student.name, plan };
+};
+
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -129,44 +203,32 @@ export async function POST(request: Request) {
     }
 
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
-    const results: Array<{ id: string; name: string; plan: Plan }> = [];
+    const settled = await Promise.allSettled(
+      students.map((student) =>
+        generatePlanForStudent({
+          client,
+          model,
+          classKey,
+          assignmentKey,
+          student,
+        }),
+      ),
+    );
 
-    for (const student of students) {
-      const cachedPlanJson = await getCachedPlanJson(
-        classKey,
-        assignmentKey,
-        student.id,
-      );
-      if (cachedPlanJson) {
-        const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
-        cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
-        const plan = ensurePlanFields(cachedPlan);
-        results.push({ id: student.id, name: student.name, plan });
-        continue;
+    const results: StudentStrategyResult[] = [];
+    const errors: StudentStrategyError[] = [];
+
+    settled.forEach((result, index) => {
+      const student = students[index];
+      if (!student) return;
+
+      if (result.status === "fulfilled") {
+        results.push(result.value);
+        return;
       }
 
-      const prompt = buildPrompt(student);
-      const completion = await client.chat.completions.create({
-        model,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: prompt.system },
-          { role: "user", content: prompt.user },
-        ],
-      });
-
-      const parsedPlan = parseJson(completion.choices[0]?.message?.content);
-      parsedPlan.strategy = normalizeStrategy(parsedPlan.strategy);
-      const plan = ensurePlanFields(parsedPlan);
-      results.push({ id: student.id, name: student.name, plan });
-
-      await upsertCachedPlanJson(
-        classKey,
-        assignmentKey,
-        student.id,
-        JSON.stringify(plan),
-      );
-    }
+      errors.push(buildStudentError(student, result.reason));
+    });
 
     const distribution: Record<string, number> = {};
     results.forEach((result) => {
@@ -174,7 +236,19 @@ export async function POST(request: Request) {
       distribution[key] = (distribution[key] ?? 0) + 1;
     });
 
-    return NextResponse.json({ results, distribution });
+    if (results.length > 0) {
+      return NextResponse.json({ results, distribution, errors });
+    }
+
+    const firstError = errors[0]?.error ?? "Failed to analyze students.";
+    const timedOut = errors.every((error) =>
+      error.error === "Strategy generation timed out before the model returned.",
+    );
+
+    return NextResponse.json(
+      { error: firstError, errors, distribution },
+      { status: timedOut ? 504 : 500 },
+    );
   } catch (error) {
     const isUpstreamTimeout =
       error instanceof Error && error.name === "APIConnectionTimeoutError";
