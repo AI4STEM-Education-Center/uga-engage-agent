@@ -130,23 +130,27 @@ const generatePlanForStudent = async ({
   classKey,
   assignmentKey,
   student,
+  forceRefresh,
 }: {
   client: OpenAI;
   model: string;
   classKey: string;
   assignmentKey: string;
   student: Student;
+  forceRefresh?: boolean;
 }): Promise<StudentStrategyResult> => {
-  const cachedPlanJson = await getCachedPlanJson(
-    classKey,
-    assignmentKey,
-    student.id,
-  );
-  if (cachedPlanJson) {
-    const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
-    cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
-    const plan = ensurePlanFields(cachedPlan);
-    return { id: student.id, name: student.name, plan };
+  if (!forceRefresh) {
+    const cachedPlanJson = await getCachedPlanJson(
+      classKey,
+      assignmentKey,
+      student.id,
+    );
+    if (cachedPlanJson) {
+      const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
+      cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
+      const plan = ensurePlanFields(cachedPlan);
+      return { id: student.id, name: student.name, plan };
+    }
   }
 
   const prompt = buildPrompt(student);
@@ -191,10 +195,12 @@ export async function POST(request: Request) {
       students = [],
       classId,
       assignmentId,
+      forceRefresh = false,
     } = (await request.json()) as {
       students?: Student[];
       classId?: string;
       assignmentId?: string;
+      forceRefresh?: boolean;
     };
     const classKey = classId?.trim();
     const assignmentKey = assignmentId?.trim();
@@ -217,6 +223,7 @@ export async function POST(request: Request) {
           classKey,
           assignmentKey,
           student,
+          forceRefresh,
         });
         results.push(result);
       } catch (error) {

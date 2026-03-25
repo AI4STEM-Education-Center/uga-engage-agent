@@ -38,6 +38,9 @@ vi.mock("@/lib/nosql", () => {
     upsertCachedPlanJson: vi.fn(async (classId: string, assignmentId: string, studentId: string, planJson: string) => {
       cache.set(`${classId}:${assignmentId}:${studentId}`, planJson);
     }),
+    __seedCache: (classId: string, assignmentId: string, studentId: string, planJson: string) => {
+      cache.set(`${classId}:${assignmentId}:${studentId}`, planJson);
+    },
     __resetCache: () => {
       cache.clear();
     },
@@ -45,11 +48,20 @@ vi.mock("@/lib/nosql", () => {
 });
 
 const { POST } = await import("@/app/api/strategy-batch/route");
-const { __resetCache } = (await import("@/lib/nosql")) as unknown as {
+const { __resetCache, __seedCache } = (await import("@/lib/nosql")) as unknown as {
   __resetCache: () => void;
+  __seedCache: (
+    classId: string,
+    assignmentId: string,
+    studentId: string,
+    planJson: string,
+  ) => void;
 };
 
-const buildRequest = (students: Array<Record<string, unknown>>) =>
+const buildRequest = (
+  students: Array<Record<string, unknown>>,
+  options?: { forceRefresh?: boolean },
+) =>
   new Request("http://localhost:3000/api/strategy-batch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -57,6 +69,7 @@ const buildRequest = (students: Array<Record<string, unknown>>) =>
       classId: "class-1",
       assignmentId: "assignment-1",
       students,
+      ...(options?.forceRefresh ? { forceRefresh: true } : {}),
     }),
   });
 
@@ -147,5 +160,71 @@ describe("POST /api/strategy-batch", () => {
         error: "Strategy generation timed out before the model returned.",
       },
     ]);
+  });
+
+  it("bypasses cached plans when forceRefresh is true", async () => {
+    __seedCache(
+      "class-1",
+      "assignment-1",
+      "student-1",
+      JSON.stringify({
+        name: "Cached plan",
+        strategy: "analogy",
+        relevance: {
+          "cognitive conflict": 10,
+          analogy: 90,
+          "experience bridging": 20,
+          "engaged critiquing": 30,
+        },
+        overallRecommendation: "Cached recommendation.",
+        recommendationReason: "Cached reason.",
+        summary: "Cached summary.",
+        tldr: "Cached tl dr.",
+        rationale: "Cached rationale.",
+        tactics: ["Cached tactic."],
+        cadence: "Cached cadence",
+        checks: ["Cached check."],
+      }),
+    );
+    createCompletion.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: "Fresh plan",
+              strategy: "experience bridging",
+              relevance: {
+                "cognitive conflict": 10,
+                analogy: 15,
+                "experience bridging": 90,
+                "engaged critiquing": 20,
+              },
+              overallRecommendation: "Fresh recommendation.",
+              recommendationReason: "Fresh reason.",
+              summary: "Fresh summary.",
+              tldr: "Fresh tl dr.",
+              rationale: "Fresh rationale.",
+              tactics: ["Fresh tactic."],
+              cadence: "Fresh cadence",
+              checks: ["Fresh check."],
+            }),
+          },
+        },
+      ],
+    });
+
+    const res = await POST(buildRequest([
+      { id: "student-1", name: "Ava", answers: { q1: "A", q2: "B" } },
+    ], { forceRefresh: true }));
+
+    expect(res.status).toBe(200);
+    expect(createCompletion).toHaveBeenCalledTimes(1);
+    const data = await res.json();
+    expect(data.results[0]).toMatchObject({
+      id: "student-1",
+      plan: {
+        strategy: "experience bridging",
+      },
+    });
   });
 });

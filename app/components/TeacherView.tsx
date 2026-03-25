@@ -1058,7 +1058,7 @@ export default function TeacherView({ user }: Props) {
     setSelectedForPublish(new Set());
     setCohortResults([]);
     setCohortDistribution({});
-    setCohortProgress({ processed: 0, total: studentAnswers.length, currentName: "Loading cache..." });
+    setCohortProgress({ processed: 0, total: studentAnswers.length, currentName: "Starting cohort analysis..." });
 
     try {
       const studentsForApi = studentAnswers.map((sa) => ({
@@ -1068,45 +1068,9 @@ export default function TeacherView({ user }: Props) {
         answers: sa.answers,
       }));
 
-      const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`;
-      const cacheRes = await fetch(cacheUrl);
-      let cacheData: { results?: Array<{ studentId?: string; plan?: unknown }> } = { results: [] };
-      if (cacheRes.ok) {
-        cacheData = await cacheRes.json();
-      }
-
-      const cachedMap = new Map<string, Plan>();
-      for (const entry of cacheData.results ?? []) {
-        if (entry.studentId && entry.plan) {
-          cachedMap.set(entry.studentId, entry.plan as Plan);
-        }
-      }
-
       const resultsMap = new Map<string, StudentStrategyResult>();
-      for (const student of studentsForApi) {
-        const cached = cachedMap.get(student.id);
-        if (!cached) continue;
-        resultsMap.set(student.id, { id: student.id, name: student.name, plan: cached });
-      }
-
-      const initialResults = studentsForApi
-        .filter((student) => resultsMap.has(student.id))
-        .map((student) => resultsMap.get(student.id) as StudentStrategyResult);
-      setCohortResults(initialResults);
-      setCohortProgress({
-        processed: initialResults.length,
-        total: studentsForApi.length,
-        currentName:
-          initialResults.length > 0
-            ? `Loaded ${initialResults.length} cached student${initialResults.length === 1 ? "" : "s"}.`
-            : "Starting cohort analysis...",
-      });
-
-      const uncachedStudents = studentsForApi.filter(
-        (student) => !cachedMap.has(student.id),
-      );
       const studentChunks = chunkItems(
-        uncachedStudents,
+        studentsForApi,
         COHORT_ANALYSIS_CHUNK_SIZE,
       );
 
@@ -1117,7 +1081,7 @@ export default function TeacherView({ user }: Props) {
           const batchStart = chunkIndex * COHORT_ANALYSIS_CHUNK_SIZE + 1;
           const batchEnd = Math.min(
             batchStart + pendingStudents.length - 1,
-            uncachedStudents.length,
+            studentsForApi.length,
           );
 
           setCohortProgress({
@@ -1125,7 +1089,7 @@ export default function TeacherView({ user }: Props) {
             total: studentsForApi.length,
             currentName:
               attempt === 1
-                ? `Analyzing batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${uncachedStudents.length} uncached students)...`
+                ? `Analyzing batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${studentsForApi.length} students)...`
                 : `Retrying ${pendingStudents.length} student${pendingStudents.length === 1 ? "" : "s"} in batch ${chunkIndex + 1} of ${studentChunks.length}...`,
           });
 
@@ -1136,6 +1100,7 @@ export default function TeacherView({ user }: Props) {
               students: pendingStudents,
               classId,
               assignmentId,
+              forceRefresh: true,
             }),
           });
           const data = await parseJsonResponse<StrategyBatchResponse>(res);
