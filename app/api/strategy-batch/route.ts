@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { APIConnectionTimeoutError } from "openai";
 import { NextResponse } from "next/server";
 
 import { getCachedPlanJson, upsertCachedPlanJson } from "@/lib/nosql";
@@ -41,7 +41,7 @@ type StudentStrategyError = {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const STRATEGY_REQUEST_TIMEOUT_MS = 25_000;
+const STRATEGY_REQUEST_TIMEOUT_MS = 45_000;
 
 const buildPrompt = (student: Student) => ({
   system: `You are an education engagement planner.
@@ -109,7 +109,10 @@ const ensurePlanFields = (plan: Plan) => {
 };
 
 const isTimeoutError = (error: unknown) =>
-  error instanceof Error && error.name === "APIConnectionTimeoutError";
+  error instanceof APIConnectionTimeoutError ||
+  (error instanceof Error &&
+    (error.constructor.name === "APIConnectionTimeoutError" ||
+      error.message === "Request timed out."));
 
 const buildStudentError = (student: Student, error: unknown): StudentStrategyError => ({
   id: student.id,
@@ -203,32 +206,23 @@ export async function POST(request: Request) {
     }
 
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
-    const settled = await Promise.allSettled(
-      students.map((student) =>
-        generatePlanForStudent({
+    const results: StudentStrategyResult[] = [];
+    const errors: StudentStrategyError[] = [];
+
+    for (const student of students) {
+      try {
+        const result = await generatePlanForStudent({
           client,
           model,
           classKey,
           assignmentKey,
           student,
-        }),
-      ),
-    );
-
-    const results: StudentStrategyResult[] = [];
-    const errors: StudentStrategyError[] = [];
-
-    settled.forEach((result, index) => {
-      const student = students[index];
-      if (!student) return;
-
-      if (result.status === "fulfilled") {
-        results.push(result.value);
-        return;
+        });
+        results.push(result);
+      } catch (error) {
+        errors.push(buildStudentError(student, error));
       }
-
-      errors.push(buildStudentError(student, result.reason));
-    });
+    }
 
     const distribution: Record<string, number> = {};
     results.forEach((result) => {
@@ -250,8 +244,7 @@ export async function POST(request: Request) {
       { status: timedOut ? 504 : 500 },
     );
   } catch (error) {
-    const isUpstreamTimeout =
-      error instanceof Error && error.name === "APIConnectionTimeoutError";
+    const isUpstreamTimeout = isTimeoutError(error);
     const message =
       isUpstreamTimeout
         ? "Strategy generation timed out before the model returned."

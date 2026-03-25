@@ -46,7 +46,7 @@ type StrategyBatchResponse = {
   error?: string;
 };
 
-const COHORT_ANALYSIS_CHUNK_SIZE = 3;
+const COHORT_ANALYSIS_CHUNK_SIZE = 1;
 const COHORT_ANALYSIS_MAX_ATTEMPTS = 2;
 
 const collectPublishedMedia = (

@@ -29,7 +29,7 @@ type Plan = {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const STRATEGY_REQUEST_TIMEOUT_MS = 25_000;
+const STRATEGY_REQUEST_TIMEOUT_MS = 45_000;
 
 const buildPrompt = (student: Student) => ({
   system: `You are an education engagement planner.
