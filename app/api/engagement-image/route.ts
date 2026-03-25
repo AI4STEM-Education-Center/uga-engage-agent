@@ -67,7 +67,41 @@ const prepareImageInput = async (imageUrl: string) => {
   return toFile(imgBuffer, "image.webp", { type: "image/webp" });
 };
 
-export const maxDuration = 120; // gpt-image-1.5 high quality can take 30-60s
+const VLM_SYSTEM_PROMPT = `You are an image-editing assistant. You receive an image with a RED RECTANGLE drawn on it, plus a short user instruction.
+
+Your job:
+1. Identify what is inside the red rectangle.
+2. Combine your understanding of the selected region with the user's instruction.
+3. Output a single, detailed image-editing prompt (1-3 sentences) that tells an image generation model EXACTLY what to change and where, using natural language spatial descriptions (e.g., "in the upper-left corner", "the figure on the right side").
+4. The prompt must describe the edit for the clean image (no red rectangle). Do NOT mention the red rectangle or annotations.
+5. Emphasize that the rest of the image must remain unchanged.
+6. The resulting prompt must maintain the instruction: the image must contain zero text of any kind.
+
+Respond with ONLY the editing prompt, nothing else.`;
+
+const generateVlmEditPrompt = async (
+  client: OpenAI,
+  annotatedImageUrl: string,
+  userPrompt: string,
+): Promise<string> => {
+  const completion = await client.chat.completions.create({
+    model: process.env.OPENAI_VLM_MODEL ?? "gpt-4o",
+    max_tokens: 300,
+    messages: [
+      { role: "system", content: VLM_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: `User instruction: ${userPrompt}` },
+          { type: "image_url", image_url: { url: annotatedImageUrl, detail: "high" } },
+        ],
+      },
+    ],
+  });
+  return completion.choices[0]?.message?.content?.trim() ?? userPrompt;
+};
+
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
@@ -87,6 +121,7 @@ export async function POST(request: Request) {
       studentId,
       refinementPrompt,
       previousImageUrl,
+      annotatedImageUrl,
     } = (await request.json()) as {
       item: ContentItem;
       lessonNumber?: number;
@@ -95,32 +130,39 @@ export async function POST(request: Request) {
       studentId?: string;
       refinementPrompt?: string;
       previousImageUrl?: string;
+      annotatedImageUrl?: string;
     };
 
-    if (typeof lessonNumber !== "number") {
+    const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1.5";
+    const trimmedRefine = refinementPrompt?.trim().slice(0, MAX_REFINEMENT_PROMPT_LENGTH);
+    const isRefine = !!(trimmedRefine && previousImageUrl);
+
+    if (!isRefine && typeof lessonNumber !== "number") {
       return NextResponse.json(
         { error: "lessonNumber is required." },
         { status: 400 },
       );
     }
 
-    const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
-    const trimmedRefine = refinementPrompt?.trim().slice(0, MAX_REFINEMENT_PROMPT_LENGTH);
-    const isRefine = !!(trimmedRefine && previousImageUrl);
-
     let result;
     if (isRefine) {
-      const imageInput = await prepareImageInput(previousImageUrl);
+      const [editPrompt, imageInput] = await Promise.all([
+        annotatedImageUrl
+          ? generateVlmEditPrompt(client, annotatedImageUrl, trimmedRefine)
+          : Promise.resolve(trimmedRefine),
+        prepareImageInput(previousImageUrl),
+      ]);
+
       result = await client.images.edit({
         model,
         image: imageInput,
-        prompt: trimmedRefine,
+        prompt: editPrompt,
         size: "1024x1024",
         quality: "high",
         output_format: "webp",
       });
     } else {
-      const prompt = buildPrompt(item, lessonNumber);
+      const prompt = buildPrompt(item, lessonNumber as number);
       result = await client.images.generate({
         model,
         prompt,

@@ -377,6 +377,9 @@ export default function TeacherView({ user }: Props) {
   const [refineTarget, setRefineTarget] = useState<{ itemId: string; title: string } | null>(null);
   const [refinePrompt, setRefinePrompt] = useState("");
   const [refineLoading, setRefineLoading] = useState(false);
+  const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const refineImgRef = useRef<HTMLImageElement>(null);
 
   // Content publishing
   const [selectedForPublish, setSelectedForPublish] = useState<Set<string>>(new Set());
@@ -1821,43 +1824,31 @@ export default function TeacherView({ user }: Props) {
     persistActiveVersion(itemId, newIndex);
   };
 
-  // Dev-only: skip to Step 3 with mock data for testing
-  const devSkipToContent = () => {
-    const mockPlan: Plan = {
-      name: "Discrepant Events", strategy: "discrepant-events",
-      relevance: { "discrepant-events": 0.9 }, overallRecommendation: "discrepant-events",
-      recommendationReason: "Students show misconceptions about collision forces.",
-      summary: "Use surprising collision demos to challenge misconceptions.",
-      tldr: "Discrepant events to address force misconceptions.",
-      rationale: "Many students believe no damage means no force.",
-      tactics: ["Show collisions where no visible damage occurs but force is measurable"],
-      cadence: "One demo per class session",
-      checks: ["Can students explain why a phone survives a pillow drop?"],
-    };
-    const mockContent: ContentItem[] = [
-      { id: "mock-1", type: "engagement", title: "The Unbreakable Phone Challenge",
-        body: "Imagine dropping your phone onto a thick pillow. It looks fine afterward.\n\nQuestion: If the phone wasn't damaged, does that mean the force was weak?",
-        strategy: "discrepant-events", textModes: ["phenomenon", "questions"],
-        visualBrief: "A smartphone bouncing off a thick pillow." },
-      { id: "mock-2", type: "engagement", title: "Bug vs. Windshield",
-        body: "A tiny bug hits a car windshield at highway speed. The windshield is fine, the bug is not.\n\nIf the forces are equal, why does only the bug get squished?",
-        strategy: "discrepant-events", textModes: ["dialogue", "phenomenon"],
-        visualBrief: "A bug approaching a car windshield with equal force arrows." },
-    ];
-    // Clear any pending restore state so image generation isn't blocked
-    setIsRestoringDraftMedia(false);
-    setIsRestoringPublishedState(false);
-    try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
-    setPlan(mockPlan);
-    setSelectedStrategies(["discrepant-events"]);
-    setContent(mockContent);
-    setImages({});
-    setVideos({});
-    imageHistoryCache.clear();
-    setCurrentStep(3);
-  };
-
   const [refineError, setRefineError] = useState<string | null>(null);
+
+  const generateAnnotatedImageDataUrl = async (): Promise<string | null> => {
+    const img = refineImgRef.current;
+    const imageUrl = images[refineTarget?.itemId ?? ""]?.url;
+    if (!img || !imageUrl || !selectionRect || selectionRect.w < 5 || selectionRect.h < 5) return null;
+
+    const response = await fetch(imageUrl.startsWith("data:") ? imageUrl : `/api/download?url=${encodeURIComponent(imageUrl)}`);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0);
+    const scaleX = bitmap.width / img.clientWidth;
+    const scaleY = bitmap.height / img.clientHeight;
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = Math.max(4, Math.round(bitmap.width / 150));
+    ctx.strokeRect(selectionRect.x * scaleX, selectionRect.y * scaleY, selectionRect.w * scaleX, selectionRect.h * scaleY);
+    return canvas.toDataURL("image/png");
+  };
 
   const handleRefine = async () => {
     if (!refineTarget || !refinePrompt.trim()) return;
@@ -1865,6 +1856,7 @@ export default function TeacherView({ user }: Props) {
     if (!item) return;
 
     const currentImageUrl = images[refineTarget.itemId]?.url;
+    const annotatedImageUrl = await generateAnnotatedImageDataUrl();
     setRefineLoading(true);
     setRefineError(null);
 
@@ -1881,6 +1873,7 @@ export default function TeacherView({ user }: Props) {
           studentId: COHORT_STUDENT_ID,
           refinementPrompt: refinePrompt.trim(),
           previousImageUrl: currentImageUrl,
+          ...(annotatedImageUrl && { annotatedImageUrl }),
         }),
       });
       const text = await res.text();
@@ -1915,6 +1908,7 @@ export default function TeacherView({ user }: Props) {
         };
       });
       setRefinePrompt("");
+      setSelectionRect(null);
     } catch (err) {
       // Keep the current image intact — just show the error in the modal
       setRefineError(err instanceof Error ? err.message : "Refine failed.");
@@ -1960,12 +1954,6 @@ export default function TeacherView({ user }: Props) {
               <Link href="/community" className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
                 Community Gallery
               </Link>
-              {process.env.NODE_ENV === "development" && (
-                <button type="button" onClick={devSkipToContent}
-                  className="flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-1.5 text-xs font-semibold text-amber-700 shadow-sm transition hover:bg-amber-100">
-                  Dev: Skip to Step 3
-                </button>
-              )}
             </div>
           </div>
         </header>
@@ -2428,7 +2416,7 @@ export default function TeacherView({ user }: Props) {
                                   className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
                                   Save
                                 </button>
-                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); }}
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); setSelectionRect(null); }}
                                   className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
                                   Refine
                                 </button>
@@ -2465,7 +2453,7 @@ export default function TeacherView({ user }: Props) {
                                   className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
                                   Save
                                 </button>
-                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); }}
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); setSelectionRect(null); }}
                                   className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
                                   Refine
                                 </button>
@@ -2548,11 +2536,59 @@ export default function TeacherView({ user }: Props) {
               </div>
               <p className="text-sm text-slate-500">{refineTarget.title}</p>
 
-              {/* Image preview */}
+              {/* Image preview with region selection */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
                   {images[refineTarget.itemId]?.status === "ready" && images[refineTarget.itemId]?.url && (
-                    <img className="max-h-[40vh] w-full rounded-xl object-contain" src={images[refineTarget.itemId]?.url} alt={refineTarget.title} />
+                    <div
+                      className="relative select-none"
+                      style={{ cursor: refineLoading ? "default" : "crosshair" }}
+                      onMouseDown={(e) => {
+                        if (refineLoading) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        setSelectionRect(null);
+                      }}
+                      onMouseMove={(e) => {
+                        if (!dragStart) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const curX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                        const curY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+                        setSelectionRect({
+                          x: Math.min(dragStart.x, curX),
+                          y: Math.min(dragStart.y, curY),
+                          w: Math.abs(curX - dragStart.x),
+                          h: Math.abs(curY - dragStart.y),
+                        });
+                      }}
+                      onMouseUp={() => {
+                        setDragStart(null);
+                        setSelectionRect((prev) => (prev && prev.w < 5 && prev.h < 5 ? null : prev));
+                      }}
+                      onMouseLeave={() => {
+                        if (dragStart) setDragStart(null);
+                      }}
+                    >
+                      <img
+                        ref={refineImgRef}
+                        className="block max-h-[40vh] rounded-xl"
+                        src={images[refineTarget.itemId]?.url}
+                        alt={refineTarget.title}
+                        draggable={false}
+                      />
+                      {selectionRect && selectionRect.w > 0 && selectionRect.h > 0 && (
+                        <svg className="pointer-events-none absolute inset-0 h-full w-full rounded-xl">
+                          <defs>
+                            <mask id="refine-selection-mask">
+                              <rect width="100%" height="100%" fill="white" />
+                              <rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="black" />
+                            </mask>
+                          </defs>
+                          <rect width="100%" height="100%" fill="rgba(0,0,0,0.4)" mask="url(#refine-selection-mask)" />
+                          <rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="none" stroke="#BA0C2F" strokeWidth="2" strokeDasharray="6 3" />
+                        </svg>
+                      )}
+                    </div>
                   )}
                   {images[refineTarget.itemId]?.status === "loading" && (
                     <div className="flex flex-col items-center gap-2 py-16">
@@ -2562,6 +2598,14 @@ export default function TeacherView({ user }: Props) {
                   )}
                   {images[refineTarget.itemId]?.status === "error" && (
                     <p className="py-16 text-sm text-rose-500">{images[refineTarget.itemId]?.error}</p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <p>{selectionRect ? "Selected region will be refined. VLM will interpret the location." : "Drag on the image to select a region, or refine the entire image."}</p>
+                  {selectionRect && (
+                    <button type="button" onClick={() => setSelectionRect(null)} className="font-semibold text-rose-500 hover:text-rose-700">
+                      Clear selection
+                    </button>
                   )}
                 </div>
                 {(images[refineTarget.itemId]?.history?.length ?? 0) > 1 && (
