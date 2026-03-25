@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { APIConnectionTimeoutError } from "openai";
 import { NextResponse } from "next/server";
 
 import { getCachedPlanJson, upsertCachedPlanJson } from "@/lib/nosql";
@@ -26,7 +26,22 @@ type Plan = {
   checks: string[];
 };
 
+type StudentStrategyResult = {
+  id: string;
+  name: string;
+  plan: Plan;
+};
+
+type StudentStrategyError = {
+  id: string;
+  name: string;
+  error: string;
+};
+
 export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const STRATEGY_REQUEST_TIMEOUT_MS = 45_000;
 
 const buildPrompt = (student: Student) => ({
   system: `You are an education engagement planner.
@@ -93,6 +108,71 @@ const ensurePlanFields = (plan: Plan) => {
   return plan;
 };
 
+const isTimeoutError = (error: unknown) =>
+  error instanceof APIConnectionTimeoutError ||
+  (error instanceof Error &&
+    (error.constructor.name === "APIConnectionTimeoutError" ||
+      error.message === "Request timed out."));
+
+const buildStudentError = (student: Student, error: unknown): StudentStrategyError => ({
+  id: student.id,
+  name: student.name,
+  error: isTimeoutError(error)
+    ? "Strategy generation timed out before the model returned."
+    : error instanceof Error
+      ? error.message
+      : `Failed to analyze ${student.name}.`,
+});
+
+const generatePlanForStudent = async ({
+  client,
+  model,
+  classKey,
+  assignmentKey,
+  student,
+}: {
+  client: OpenAI;
+  model: string;
+  classKey: string;
+  assignmentKey: string;
+  student: Student;
+}): Promise<StudentStrategyResult> => {
+  const cachedPlanJson = await getCachedPlanJson(
+    classKey,
+    assignmentKey,
+    student.id,
+  );
+  if (cachedPlanJson) {
+    const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
+    cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
+    const plan = ensurePlanFields(cachedPlan);
+    return { id: student.id, name: student.name, plan };
+  }
+
+  const prompt = buildPrompt(student);
+  const completion = await client.chat.completions.create({
+    model,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
+  });
+
+  const parsedPlan = parseJson(completion.choices[0]?.message?.content);
+  parsedPlan.strategy = normalizeStrategy(parsedPlan.strategy);
+  const plan = ensurePlanFields(parsedPlan);
+
+  await upsertCachedPlanJson(
+    classKey,
+    assignmentKey,
+    student.id,
+    JSON.stringify(plan),
+  );
+
+  return { id: student.id, name: student.name, plan };
+};
+
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -102,7 +182,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: STRATEGY_REQUEST_TIMEOUT_MS,
+      maxRetries: 0,
+    });
     const {
       students = [],
       classId,
@@ -122,43 +206,22 @@ export async function POST(request: Request) {
     }
 
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
-    const results: Array<{ id: string; name: string; plan: Plan }> = [];
+    const results: StudentStrategyResult[] = [];
+    const errors: StudentStrategyError[] = [];
 
     for (const student of students) {
-      const cachedPlanJson = await getCachedPlanJson(
-        classKey,
-        assignmentKey,
-        student.id,
-      );
-      if (cachedPlanJson) {
-        const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
-        cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
-        const plan = ensurePlanFields(cachedPlan);
-        results.push({ id: student.id, name: student.name, plan });
-        continue;
+      try {
+        const result = await generatePlanForStudent({
+          client,
+          model,
+          classKey,
+          assignmentKey,
+          student,
+        });
+        results.push(result);
+      } catch (error) {
+        errors.push(buildStudentError(student, error));
       }
-
-      const prompt = buildPrompt(student);
-      const completion = await client.chat.completions.create({
-        model,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: prompt.system },
-          { role: "user", content: prompt.user },
-        ],
-      });
-
-      const parsedPlan = parseJson(completion.choices[0]?.message?.content);
-      parsedPlan.strategy = normalizeStrategy(parsedPlan.strategy);
-      const plan = ensurePlanFields(parsedPlan);
-      results.push({ id: student.id, name: student.name, plan });
-
-      await upsertCachedPlanJson(
-        classKey,
-        assignmentKey,
-        student.id,
-        JSON.stringify(plan),
-      );
     }
 
     const distribution: Record<string, number> = {};
@@ -167,11 +230,31 @@ export async function POST(request: Request) {
       distribution[key] = (distribution[key] ?? 0) + 1;
     });
 
-    return NextResponse.json({ results, distribution });
+    if (results.length > 0) {
+      return NextResponse.json({ results, distribution, errors });
+    }
+
+    const firstError = errors[0]?.error ?? "Failed to analyze students.";
+    const timedOut = errors.every((error) =>
+      error.error === "Strategy generation timed out before the model returned.",
+    );
+
+    return NextResponse.json(
+      { error: firstError, errors, distribution },
+      { status: timedOut ? 504 : 500 },
+    );
   } catch (error) {
+    const isUpstreamTimeout = isTimeoutError(error);
     const message =
-      error instanceof Error ? error.message : "Failed to analyze students.";
-    console.error("strategy-batch error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+      isUpstreamTimeout
+        ? "Strategy generation timed out before the model returned."
+        : error instanceof Error
+          ? error.message
+          : "Failed to analyze students.";
+    console.error("strategy-batch error:", message, error);
+    return NextResponse.json(
+      { error: message },
+      { status: isUpstreamTimeout ? 504 : 500 },
+    );
   }
 }
