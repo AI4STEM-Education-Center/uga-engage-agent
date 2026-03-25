@@ -46,7 +46,7 @@ type StrategyBatchResponse = {
   error?: string;
 };
 
-const COHORT_ANALYSIS_CHUNK_SIZE = 1;
+const COHORT_ANALYSIS_CHUNK_SIZE = 4;
 const COHORT_ANALYSIS_MAX_ATTEMPTS = 2;
 
 const collectPublishedMedia = (
@@ -1128,7 +1128,6 @@ export default function TeacherView({ user }: Props) {
                 ? `Analyzing batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${uncachedStudents.length} uncached students)...`
                 : `Retrying ${pendingStudents.length} student${pendingStudents.length === 1 ? "" : "s"} in batch ${chunkIndex + 1} of ${studentChunks.length}...`,
           });
-
           const res = await fetch("/api/strategy-batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

@@ -42,6 +42,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const STRATEGY_REQUEST_TIMEOUT_MS = 45_000;
+const STRATEGY_BATCH_CONCURRENCY = 4;
 
 const buildPrompt = (student: Student) => ({
   system: `You are an education engagement planner.
@@ -108,13 +109,26 @@ const ensurePlanFields = (plan: Plan) => {
   return plan;
 };
 
+const chunkItems = <T,>(items: T[], size: number) => {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+};
+
 const isTimeoutError = (error: unknown) =>
   error instanceof APIConnectionTimeoutError ||
   (error instanceof Error &&
     (error.constructor.name === "APIConnectionTimeoutError" ||
       error.message === "Request timed out."));
 
-const buildStudentError = (student: Student, error: unknown): StudentStrategyError => ({
+const buildStudentError = (
+  student: Student,
+  error: unknown,
+): StudentStrategyError => ({
   id: student.id,
   name: student.name,
   error: isTimeoutError(error)
@@ -182,6 +196,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const startedAt = Date.now();
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       timeout: STRATEGY_REQUEST_TIMEOUT_MS,
@@ -209,18 +224,29 @@ export async function POST(request: Request) {
     const results: StudentStrategyResult[] = [];
     const errors: StudentStrategyError[] = [];
 
-    for (const student of students) {
-      try {
-        const result = await generatePlanForStudent({
-          client,
-          model,
-          classKey,
-          assignmentKey,
-          student,
-        });
-        results.push(result);
-      } catch (error) {
-        errors.push(buildStudentError(student, error));
+    const studentChunks = chunkItems(students, STRATEGY_BATCH_CONCURRENCY);
+    for (const studentChunk of studentChunks) {
+      const settledResults = await Promise.allSettled(
+        studentChunk.map((student) =>
+          generatePlanForStudent({
+            client,
+            model,
+            classKey,
+            assignmentKey,
+            student,
+          }),
+        ),
+      );
+
+      for (let index = 0; index < settledResults.length; index += 1) {
+        const settled = settledResults[index];
+        const student = studentChunk[index];
+        if (settled.status === "fulfilled") {
+          results.push(settled.value);
+          continue;
+        }
+
+        errors.push(buildStudentError(student, settled.reason));
       }
     }
 
@@ -231,6 +257,9 @@ export async function POST(request: Request) {
     });
 
     if (results.length > 0) {
+      console.info(
+        `strategy-batch complete: classId=${classKey} assignmentId=${assignmentKey} students=${students.length} results=${results.length} errors=${errors.length} durationMs=${Date.now() - startedAt}`,
+      );
       return NextResponse.json({ results, distribution, errors });
     }
 
@@ -239,6 +268,9 @@ export async function POST(request: Request) {
       error.error === "Strategy generation timed out before the model returned.",
     );
 
+    console.info(
+      `strategy-batch failed: classId=${classKey} assignmentId=${assignmentKey} students=${students.length} results=0 errors=${errors.length} durationMs=${Date.now() - startedAt}`,
+    );
     return NextResponse.json(
       { error: firstError, errors, distribution },
       { status: timedOut ? 504 : 500 },

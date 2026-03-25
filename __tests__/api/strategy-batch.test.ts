@@ -66,6 +66,33 @@ beforeEach(() => {
   __resetCache();
 });
 
+const buildCompletion = (strategy = "experience bridging") => ({
+  choices: [
+    {
+      message: {
+        content: JSON.stringify({
+          name: "Bridge to prior knowledge",
+          strategy,
+          relevance: {
+            "cognitive conflict": strategy === "cognitive conflict" ? 90 : 10,
+            analogy: strategy === "analogy" ? 90 : 15,
+            "experience bridging": strategy === "experience bridging" ? 90 : 20,
+            "engaged critiquing": strategy === "engaged critiquing" ? 90 : 25,
+          },
+          overallRecommendation: "Connect the concept to the student's experience.",
+          recommendationReason: "This fits the student because they referenced a concrete real-world example.",
+          summary: "Use prior experience to ground the lesson.",
+          tldr: "Anchor the lesson in familiar experiences.",
+          rationale: "The student named a concrete example from daily life.",
+          tactics: ["Start with a familiar example."],
+          cadence: "At lesson launch",
+          checks: ["Ask the student to compare the example to the new concept."],
+        }),
+      },
+    },
+  ],
+});
+
 describe("POST /api/strategy-batch", () => {
   it("returns 504 and normalized timeout errors when every student times out", async () => {
     createCompletion
@@ -96,32 +123,7 @@ describe("POST /api/strategy-batch", () => {
 
   it("returns partial results when one student succeeds and another times out", async () => {
     createCompletion
-      .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                name: "Bridge to prior knowledge",
-                strategy: "experience bridging",
-                relevance: {
-                  "cognitive conflict": 10,
-                  analogy: 15,
-                  "experience bridging": 90,
-                  "engaged critiquing": 20,
-                },
-                overallRecommendation: "Connect the concept to the student's experience.",
-                recommendationReason: "This fits Ava because she referenced a concrete real-world example.",
-                summary: "Use prior experience to ground the lesson.",
-                tldr: "Anchor the lesson in familiar experiences.",
-                rationale: "Ava named a concrete example from daily life.",
-                tactics: ["Start with a familiar example."],
-                cadence: "At lesson launch",
-                checks: ["Ask Ava to compare the example to the new concept."],
-              }),
-            },
-          },
-        ],
-      })
+      .mockResolvedValueOnce(buildCompletion("experience bridging"))
       .mockRejectedValueOnce(new MockAPIConnectionTimeoutError());
 
     const res = await POST(buildRequest([
@@ -147,5 +149,36 @@ describe("POST /api/strategy-batch", () => {
         error: "Strategy generation timed out before the model returned.",
       },
     ]);
+  });
+
+  it("starts multiple student generations in parallel within a batch", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    createCompletion.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const requestPromise = POST(buildRequest([
+      { id: "student-1", name: "Ava", answers: { q1: "A", q2: "B" } },
+      { id: "student-2", name: "Jon", answers: { q1: "C", q2: "D" } },
+      { id: "student-3", name: "David", answers: { q1: "E", q2: "F" } },
+      { id: "student-4", name: "Mia", answers: { q1: "G", q2: "H" } },
+    ]));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(createCompletion).toHaveBeenCalledTimes(4);
+
+    resolvers.forEach((resolve, index) => {
+      resolve(buildCompletion(index % 2 === 0 ? "experience bridging" : "analogy"));
+    });
+
+    const res = await requestPromise;
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.results).toHaveLength(4);
+    expect(data.errors).toEqual([]);
   });
 });
