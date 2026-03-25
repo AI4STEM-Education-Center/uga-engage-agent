@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { NextResponse } from "next/server";
 import { getMedia, upsertMedia } from "@/lib/nosql";
 
@@ -33,7 +33,7 @@ const buildPrompt = (
   const textModes = item.textModes?.length ? item.textModes.join(", ") : item.type;
   const visualBrief = item.visualBrief?.trim();
 
-  return `Create a simple, student-friendly illustration for an ${gradeLevel} physics lesson.
+  return `Create a simple, student-friendly illustration for a ${gradeLevel} lesson.
 This image will be shown directly to students next to the material below.
 Topic: ${topic}
 Strategy inspiration: ${planName}
@@ -49,6 +49,28 @@ If the material describes a phenomenon, make that phenomenon visually central.
 Style: clean, minimal, classroom-friendly.
 Hard requirement: the image must contain zero text of any kind.
 Do not render words, letters, numbers, equations, symbols, speech bubbles with text, captions, labels, posters, signs, UI text, or watermarks.`;
+};
+
+const MAX_REFINEMENT_PROMPT_LENGTH = 500;
+
+const isSafetyRejection = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return msg.includes("safety") || msg.includes("content_policy") || msg.includes("policy") || msg.includes("moderation");
+};
+
+const prepareImageInput = async (
+  client: OpenAI,
+  imageUrl: string,
+) => {
+  if (imageUrl.startsWith("data:")) {
+    const base64Part = imageUrl.split(",")[1];
+    const buffer = Buffer.from(base64Part, "base64");
+    return toFile(buffer, "image.webp", { type: "image/webp" });
+  }
+  const imgRes = await fetch(imageUrl);
+  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+  return toFile(imgBuffer, "image.webp", { type: "image/webp" });
 };
 
 export const maxDuration = 60; // seconds – image generation can take 15-30s
@@ -70,6 +92,8 @@ export async function POST(request: Request) {
       classId,
       assignmentId,
       studentId,
+      refinementPrompt,
+      previousImageUrl,
     } = (await request.json()) as {
       item: ContentItem;
       plan: Plan | null;
@@ -77,19 +101,36 @@ export async function POST(request: Request) {
       classId?: string;
       assignmentId?: string;
       studentId?: string;
+      refinementPrompt?: string;
+      previousImageUrl?: string;
     };
 
     const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
-    const prompt = buildPrompt(item, plan, answers);
+    const trimmedRefine = refinementPrompt?.trim().slice(0, MAX_REFINEMENT_PROMPT_LENGTH);
+    const isRefine = !!(trimmedRefine && previousImageUrl);
 
-    // webp + low quality = fast generation + small payload (avoids Amplify 30s timeout)
-    const result = await client.images.generate({
-      model,
-      prompt,
-      size: "1024x1024",
-      quality: "low",
-      output_format: "webp",
-    });
+    let result;
+    if (isRefine) {
+      const imageInput = await prepareImageInput(client, previousImageUrl);
+      result = await client.images.edit({
+        model,
+        image: imageInput,
+        prompt: trimmedRefine,
+        size: "1024x1024",
+        quality: "high",
+        output_format: "webp",
+      });
+    } else {
+      // Normal generation from scratch
+      const prompt = buildPrompt(item, plan, answers);
+      result = await client.images.generate({
+        model,
+        prompt,
+        size: "1024x1024",
+        quality: "high",
+        output_format: "webp",
+      });
+    }
 
     const data = result.data?.[0];
     const base64 = data?.b64_json;
@@ -133,7 +174,12 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to generate image.";
+    const isSafety = isSafetyRejection(error);
     console.error("engagement-image error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({
+      error: isSafety
+        ? "Your refinement instruction was flagged by content policy. Please rephrase and try again."
+        : message,
+    }, { status: isSafety ? 422 : 500 });
   }
 }
