@@ -5,6 +5,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -19,6 +20,14 @@ type StrategyCacheRecord = {
   updated_at: string;
 };
 
+type MediaVersion = {
+  data_url?: string;
+  s3_bucket?: string;
+  s3_key?: string;
+  refinement_prompt?: string;
+  created_at: string;
+};
+
 type MediaRecord = {
   media_id: string;
   content_item_id: string;
@@ -31,6 +40,8 @@ type MediaRecord = {
   assignment_id: string;
   student_id: string;
   created_at: string;
+  versions?: MediaVersion[];
+  active_version?: number;
 };
 
 type QuizStatusRecord = {
@@ -703,6 +714,7 @@ export type UpsertMediaInput = {
   mediaType: "image" | "video";
   mimeType: string;
   dataUrl: string;
+  refinementPrompt?: string;
 };
 
 const mediaExt = (mime: string) =>
@@ -722,9 +734,11 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
     mediaType,
     mimeType,
     dataUrl,
+    refinementPrompt,
   } = input;
   const mediaId = `${classId}_${assignmentId}_${studentId}_${contentItemId}_${mediaType}`;
   const createdAt = new Date().toISOString();
+  const MAX_VERSIONS = 10;
 
   if (useDynamoDb) {
     const client = getDynamoClient();
@@ -732,47 +746,52 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
       return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
     }
 
+    const pk = `CLASS#${classId}`;
+    const sk = `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`;
+
+    // Load existing record to preserve version history
+    const existing = await client.send(new GetCommand({ TableName: dynamoTableName, Key: { [pkField]: pk, [skField]: sk } }));
+    const existingVersions: MediaVersion[] = (existing.Item?.versions as MediaVersion[] | undefined) ?? [];
+    // Monotonic counter to avoid S3 key collisions when MAX_VERSIONS caps old entries
+    const versionCounter = ((existing.Item?.version_counter as number) ?? existingVersions.length);
+
     const s3 = getS3Client();
     if (s3 && s3Bucket) {
       try {
-        // Upload to S3; store only s3_key in DynamoDB (< 400KB)
         const base64Match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
         const body = base64Match
           ? Buffer.from(base64Match[1], "base64")
           : Buffer.from(dataUrl, "utf-8");
         const ext = mediaExt(mimeType);
-        const s3Key = `media/${classId}/${assignmentId}/${studentId}/${contentItemId}_${mediaType}.${ext}`;
+        const s3Key = `media/${classId}/${assignmentId}/${studentId}/${contentItemId}_${mediaType}_v${versionCounter}.${ext}`;
 
         await s3.send(
-          new PutObjectCommand({
-            Bucket: s3Bucket,
-            Key: s3Key,
-            Body: body,
-            ContentType: mimeType,
-          }),
+          new PutObjectCommand({ Bucket: s3Bucket, Key: s3Key, Body: body, ContentType: mimeType }),
         );
+
+        const newVersion: MediaVersion = { s3_bucket: s3Bucket, s3_key: s3Key, refinement_prompt: refinementPrompt, created_at: createdAt };
+        const allVersions = [...existingVersions, newVersion];
+        const cappedVersions = allVersions.length > MAX_VERSIONS ? allVersions.slice(allVersions.length - MAX_VERSIONS) : allVersions;
+        const activeVersion = cappedVersions.length - 1;
 
         await client.send(
           new PutCommand({
             TableName: dynamoTableName,
             Item: {
-              [pkField]: `CLASS#${classId}`,
-              [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
-              record_type: "media",
-              assignment_id: assignmentId,
+              [pkField]: pk, [skField]: sk,
+              record_type: "media", assignment_id: assignmentId,
               [gsiStudentPkField]: `STUDENT#${studentId}`,
               [gsiStudentSkField]: `MEDIA#ASSIGN#${assignmentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
-              media_id: mediaId,
-              content_item_id: contentItemId,
-              media_type: mediaType,
-              mime_type: mimeType,
-              s3_bucket: s3Bucket,
-              s3_key: s3Key,
+              media_id: mediaId, content_item_id: contentItemId,
+              media_type: mediaType, mime_type: mimeType,
+              s3_bucket: s3Bucket, s3_key: s3Key,
+              versions: cappedVersions, active_version: activeVersion,
+              version_counter: versionCounter + 1,
               created_at: createdAt,
             },
           }),
         );
-        return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
+        return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, s3_bucket: s3Bucket, s3_key: s3Key, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt, versions: cappedVersions, active_version: activeVersion };
       } catch (error) {
         console.error(`Failed to store ${mediaType} ${mediaId} in S3. Falling back to DynamoDB inline storage.`, error);
       }
@@ -787,44 +806,49 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
       return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
     }
 
+    const newVersion: MediaVersion = { data_url: dataUrl, refinement_prompt: refinementPrompt, created_at: createdAt };
+    const allVersions = [...existingVersions, newVersion];
+    const cappedVersions = allVersions.length > MAX_VERSIONS ? allVersions.slice(allVersions.length - MAX_VERSIONS) : allVersions;
+    const activeVersion = cappedVersions.length - 1;
+
     await client.send(
       new PutCommand({
         TableName: dynamoTableName,
         Item: {
-          [pkField]: `CLASS#${classId}`,
-          [skField]: `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
-          record_type: "media",
-          assignment_id: assignmentId,
+          [pkField]: pk, [skField]: sk,
+          record_type: "media", assignment_id: assignmentId,
           [gsiStudentPkField]: `STUDENT#${studentId}`,
           [gsiStudentSkField]: `MEDIA#ASSIGN#${assignmentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`,
-          media_id: mediaId,
-          content_item_id: contentItemId,
-          media_type: mediaType,
-          mime_type: mimeType,
+          media_id: mediaId, content_item_id: contentItemId,
+          media_type: mediaType, mime_type: mimeType,
           data_url: dataUrl,
+          versions: cappedVersions, active_version: activeVersion,
+          version_counter: versionCounter + 1,
           created_at: createdAt,
         },
       }),
     );
-    return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, data_url: dataUrl, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt };
+    return { media_id: mediaId, content_item_id: contentItemId, media_type: mediaType, mime_type: mimeType, data_url: dataUrl, class_id: classId, assignment_id: assignmentId, student_id: studentId, created_at: createdAt, versions: cappedVersions, active_version: activeVersion };
   }
 
-  // Local JSON: store data_url (no size limit)
-  const record: MediaRecord = {
-    media_id: mediaId,
-    content_item_id: contentItemId,
-    media_type: mediaType,
-    mime_type: mimeType,
-    data_url: dataUrl,
-    class_id: classId,
-    assignment_id: assignmentId,
-    student_id: studentId,
-    created_at: createdAt,
-  };
+  // Local JSON: store data_url with version history
+  const newVersion: MediaVersion = { data_url: dataUrl, refinement_prompt: refinementPrompt, created_at: createdAt };
+  let record: MediaRecord;
 
   await withWriteLock(async () => {
     const store = await loadStore();
     const existingIndex = store.media.findIndex((m) => m.media_id === mediaId);
+    const existingVersions = existingIndex >= 0 ? (store.media[existingIndex].versions ?? []) : [];
+    const allVersions = [...existingVersions, newVersion];
+    const cappedVersions = allVersions.length > MAX_VERSIONS ? allVersions.slice(allVersions.length - MAX_VERSIONS) : allVersions;
+
+    record = {
+      media_id: mediaId, content_item_id: contentItemId,
+      media_type: mediaType, mime_type: mimeType, data_url: dataUrl,
+      class_id: classId, assignment_id: assignmentId, student_id: studentId,
+      created_at: createdAt, versions: cappedVersions, active_version: cappedVersions.length - 1,
+    };
+
     if (existingIndex >= 0) {
       store.media[existingIndex] = record;
     } else {
@@ -833,7 +857,7 @@ export const upsertMedia = async (input: UpsertMediaInput) => {
     await persistStore(store);
   });
 
-  return record;
+  return record!;
 };
 
 const PRESIGNED_EXPIRY_SEC = 3600;
@@ -876,6 +900,24 @@ async function resolveMediaUrl(record: MediaRecord): Promise<MediaRecord> {
   return record;
 }
 
+/** Resolve presigned URLs for a record and all its versions. */
+async function resolveMediaWithVersions(record: MediaRecord): Promise<MediaRecord> {
+  const resolved = await resolveMediaUrl(record);
+  if (resolved.versions?.length) {
+    resolved.versions = await Promise.all(
+      resolved.versions.map(async (v) => {
+        if (v.data_url) return v;
+        if (v.s3_key && v.s3_bucket) {
+          const vRecord = await resolveMediaUrl({ ...resolved, data_url: undefined, s3_key: v.s3_key, s3_bucket: v.s3_bucket });
+          return { ...v, data_url: vRecord.data_url };
+        }
+        return v;
+      }),
+    );
+  }
+  return resolved;
+}
+
 /**
  * Retrieve a single media record by its composite key.
  */
@@ -915,6 +957,8 @@ export const getMedia = async (
       assignment_id: assignmentId,
       student_id: studentId,
       created_at: (result.Item.created_at as string) ?? "",
+      versions: result.Item.versions as MediaVersion[] | undefined,
+      active_version: result.Item.active_version as number | undefined,
     };
   } else {
     const store = await loadStore();
@@ -923,7 +967,67 @@ export const getMedia = async (
   }
 
   if (!record) return null;
-  return resolveMediaUrl(record);
+  return resolveMediaWithVersions(record);
+};
+
+/**
+ * Set the active version for a media record (used when teacher navigates image history).
+ */
+export const setActiveMediaVersion = async (
+  classId: string,
+  assignmentId: string,
+  studentId: string,
+  contentItemId: string,
+  mediaType: "image" | "video",
+  versionIndex: number,
+): Promise<boolean> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return false;
+    const pk = `CLASS#${classId}`;
+    const sk = `MEDIA#ASSIGN#${assignmentId}#STUDENT#${studentId}#ITEM#${contentItemId}#${mediaType.toUpperCase()}`;
+
+    // Read raw record without resolving presigned URLs
+    const result = await client.send(new GetCommand({ TableName: dynamoTableName, Key: { [pkField]: pk, [skField]: sk } }));
+    const versions = (result.Item?.versions as MediaVersion[] | undefined) ?? [];
+    if (!versions.length) return false;
+    const idx = Math.max(0, Math.min(versionIndex, versions.length - 1));
+    const activeV = versions[idx];
+
+    const updateFields: Record<string, unknown> = { active_version: idx };
+    if (activeV.s3_key) updateFields.s3_key = activeV.s3_key;
+    if (activeV.s3_bucket) updateFields.s3_bucket = activeV.s3_bucket;
+    if (activeV.data_url && !activeV.s3_key) updateFields.data_url = activeV.data_url;
+
+    const setExprs = Object.keys(updateFields).map((k) => `#${k} = :${k}`);
+    const names = Object.fromEntries(Object.keys(updateFields).map((k) => [`#${k}`, k]));
+    const values = Object.fromEntries(Object.entries(updateFields).map(([k, v]) => [`:${k}`, v]));
+
+    await client.send(new UpdateCommand({
+      TableName: dynamoTableName,
+      Key: { [pkField]: pk, [skField]: sk },
+      UpdateExpression: `SET ${setExprs.join(", ")}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    }));
+    return true;
+  }
+
+  // Local JSON
+  let found = false;
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const mediaId = `${classId}_${assignmentId}_${studentId}_${contentItemId}_${mediaType}`;
+    const existing = store.media.find((m) => m.media_id === mediaId);
+    if (!existing?.versions?.length) return;
+    const idx = Math.max(0, Math.min(versionIndex, existing.versions.length - 1));
+    existing.active_version = idx;
+    const activeV = existing.versions[idx];
+    if (activeV.data_url) existing.data_url = activeV.data_url;
+    await persistStore(store);
+    found = true;
+  });
+  return found;
 };
 
 /**
@@ -985,8 +1089,10 @@ export const listMedia = async (
         assignment_id: assignmentId,
         student_id: studentId,
         created_at: (item.created_at as string) ?? "",
+        versions: item.versions as MediaVersion[] | undefined,
+        active_version: item.active_version as number | undefined,
       }));
-    return Promise.all(records.map(resolveMediaUrl));
+    return Promise.all(records.map(resolveMediaWithVersions));
   }
 
   // Local JSON fallback

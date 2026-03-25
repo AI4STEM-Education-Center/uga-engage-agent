@@ -130,9 +130,30 @@ type PersistedDraft = {
 };
 
 
-// Module-level cache: survives component unmount/remount during SPA navigation (Link).
-// Lost only on full page refresh — acceptable trade-off vs. localStorage size limits.
+// Survives component unmount/remount during SPA navigation; cleared on full page refresh.
 const imageHistoryCache = new Map<string, { history: ImageVersion[]; historyIndex: number }>();
+
+const COHORT_STUDENT_ID = "cohort";
+
+/** Merge cached/existing history into a restored ImageState. */
+const mergeImageWithHistory = (
+  itemId: string,
+  base: ImageState,
+  existingHistory?: ImageVersion[],
+  existingIndex?: number,
+): ImageState => {
+  const cached = imageHistoryCache.get(itemId);
+  const history = existingHistory?.length ? existingHistory : cached?.history;
+  const historyIndex = existingHistory?.length ? (existingIndex ?? 0) : cached?.historyIndex;
+
+  if (history?.length) {
+    return { ...base, history, historyIndex: historyIndex ?? 0, url: history[historyIndex ?? 0]?.url ?? base.url };
+  }
+  if (base.url) {
+    return { ...base, history: [{ url: base.url, createdAt: new Date().toISOString() }], historyIndex: 0 };
+  }
+  return base;
+};
 
 const LEGACY_DRAFT_STORAGE_KEY = "engage-agent:draft:v2";
 const DRAFT_STORAGE_PREFIX = "engage-agent:draft:v3";
@@ -655,11 +676,7 @@ export default function TeacherView({ user }: Props) {
                   (state.status === "ready" && Boolean(state.url))
                 ),
             ).map(([itemId, state]) => {
-              // Merge cached history back (survives SPA navigation even when base64 was trimmed)
-              const cached = imageHistoryCache.get(itemId);
-              if (cached && state.status === "ready") {
-                return [itemId, { ...state, history: cached.history, historyIndex: cached.historyIndex, url: cached.history[cached.historyIndex]?.url ?? state.url }];
-              }
+              if (state.status === "ready") return [itemId, mergeImageWithHistory(itemId, state, state.history, state.historyIndex)];
               return [itemId, state];
             }),
           ) as Record<string, ImageState>;
@@ -683,17 +700,11 @@ export default function TeacherView({ user }: Props) {
           setAnnotationReason(draft.annotationReason ?? "");
           setAnnotationStatus(draft.annotationStatus ?? "idle");
           setContent(restoredContent);
-          // Restore images from cache for items that were stripped from localStorage
           const mergedImages = { ...restoredImages };
           for (const item of restoredContent) {
-            if (!mergedImages[item.id] && imageHistoryCache.has(item.id)) {
-              const cached = imageHistoryCache.get(item.id)!;
-              mergedImages[item.id] = {
-                status: "ready",
-                url: cached.history[cached.historyIndex]?.url,
-                history: cached.history,
-                historyIndex: cached.historyIndex,
-              };
+            if (!mergedImages[item.id]) {
+              const cached = imageHistoryCache.get(item.id);
+              if (cached) mergedImages[item.id] = mergeImageWithHistory(item.id, { status: "ready" });
             }
           }
           setImages(mergedImages);
@@ -752,7 +763,7 @@ export default function TeacherView({ user }: Props) {
     const restorePersistedStep3State = async () => {
       try {
         const [mediaRes, publishRes] = await Promise.all([
-          fetch(`/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`),
+          fetch(`/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${COHORT_STUDENT_ID}`),
           fetch(`/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`),
         ]);
 
@@ -774,7 +785,27 @@ export default function TeacherView({ user }: Props) {
             const itemId = record.content_item_id;
             if (!itemId || !contentIds.has(itemId) || !record.data_url) continue;
             if (record.media_type === "image") {
-              persistedImages[itemId] = { status: "ready", url: record.data_url };
+              // Build history from DB versions if available
+              const dbVersions = (record as { versions?: Array<{ data_url?: string; refinement_prompt?: string; created_at?: string }> }).versions;
+              const activeIdx = (record as { active_version?: number }).active_version;
+              if (dbVersions?.length) {
+                const history: ImageVersion[] = dbVersions
+                  .filter((v: { data_url?: string }) => v.data_url)
+                  .map((v: { data_url?: string; refinement_prompt?: string; created_at?: string }) => ({
+                    url: v.data_url!,
+                    refinementPrompt: v.refinement_prompt,
+                    createdAt: v.created_at ?? "",
+                  }));
+                const idx = Math.min(activeIdx ?? history.length - 1, history.length - 1);
+                persistedImages[itemId] = {
+                  status: "ready",
+                  url: history[idx]?.url ?? record.data_url,
+                  history,
+                  historyIndex: idx,
+                };
+              } else {
+                persistedImages[itemId] = { status: "ready", url: record.data_url };
+              }
             }
             if (record.media_type === "video") {
               persistedVideos[itemId] = { status: "ready", url: record.data_url };
@@ -784,20 +815,7 @@ export default function TeacherView({ user }: Props) {
           setImages((prev) => {
             const merged = { ...prev };
             for (const [itemId, persisted] of Object.entries(persistedImages)) {
-              const existing = merged[itemId];
-              if (existing?.history?.length) {
-                // Preserve in-memory history
-                merged[itemId] = { ...persisted, history: existing.history, historyIndex: existing.historyIndex };
-              } else if (persisted.url) {
-                // Initialize history for DB-restored images
-                merged[itemId] = {
-                  ...persisted,
-                  history: [{ url: persisted.url, createdAt: new Date().toISOString() }],
-                  historyIndex: 0,
-                };
-              } else {
-                merged[itemId] = persisted;
-              }
+              merged[itemId] = persisted;
             }
             return merged;
           });
@@ -881,7 +899,7 @@ export default function TeacherView({ user }: Props) {
 
         const contentIds = new Set(restoredContent.map((item) => item.id));
         const mediaRes = await fetch(
-          `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`,
+          `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${COHORT_STUDENT_ID}`,
         );
 
         if (cancelled) return;
@@ -925,17 +943,9 @@ export default function TeacherView({ user }: Props) {
         const publishedIds = restoredContent.map((item) => item.id);
 
         setContent(restoredContent);
-        // Initialize history for published-restored images
         const imagesWithHistory: Record<string, ImageState> = {};
         for (const [itemId, state] of Object.entries(restoredImages)) {
-          if (state.url) {
-            const cached = imageHistoryCache.get(itemId);
-            imagesWithHistory[itemId] = cached?.history?.length
-              ? { ...state, history: cached.history, historyIndex: cached.historyIndex }
-              : { ...state, history: [{ url: state.url, createdAt: new Date().toISOString() }], historyIndex: 0 };
-          } else {
-            imagesWithHistory[itemId] = state;
-          }
+          imagesWithHistory[itemId] = mergeImageWithHistory(itemId, state);
         }
         setImages(imagesWithHistory);
         setVideos(restoredVideos);
@@ -982,7 +992,7 @@ export default function TeacherView({ user }: Props) {
             contentItemId: itemId,
             classId,
             assignmentId,
-            studentId: "cohort",
+            studentId: COHORT_STUDENT_ID,
           });
           const res = await fetch(`/api/engagement-video/status?${params}`);
           const data = (await res.json()) as {
@@ -1311,6 +1321,7 @@ export default function TeacherView({ user }: Props) {
     setContent([]);
     setImages({});
     setVideos({});
+    imageHistoryCache.clear();
     setSelectedForPublish(new Set());
     setCohortResults([]);
     setCohortDistribution({});
@@ -1545,6 +1556,7 @@ export default function TeacherView({ user }: Props) {
       setContent(items);
       setImages({});
       setVideos({});
+      imageHistoryCache.clear();
       setSelectedForPublish(new Set());
       setCurrentStep(3);
     } catch (err) {
@@ -1671,42 +1683,44 @@ export default function TeacherView({ user }: Props) {
     (async () => {
       for (const item of pending) {
         if (cancelled) break;
-        try {
-          const res = await fetch("/api/engagement-image", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              item,
-              lessonNumber: selectedLesson,
-              classId,
-              assignmentId,
-              studentId: "cohort",
-            }),
-          });
-          const text = await res.text();
-          let data: Record<string, unknown>;
-          try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
-          if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
-          if (!cancelled) {
-            const newUrl = data.url as string;
-            setImages((prev) => {
-              // If history already exists (e.g. from cache), don't reset it
-              if (prev[item.id]?.history?.length) {
-                return { ...prev, [item.id]: { ...prev[item.id], status: "ready", url: newUrl } };
-              }
-              return {
-                ...prev,
-                [item.id]: {
-                  status: "ready",
-                  url: newUrl,
-                  history: [{ url: newUrl, createdAt: new Date().toISOString() }],
-                  historyIndex: 0,
-                },
-              };
+        let lastError: Error | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const res = await fetch("/api/engagement-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item, lessonNumber: selectedLesson, classId, assignmentId, studentId: COHORT_STUDENT_ID }),
             });
+            const text = await res.text();
+            let data: Record<string, unknown>;
+            try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+            if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
+            lastError = null;
+            if (!cancelled) {
+              const newUrl = data.url as string;
+              setImages((prev) => {
+                if (prev[item.id]?.history?.length) {
+                  return { ...prev, [item.id]: { ...prev[item.id], status: "ready", url: newUrl } };
+                }
+                return {
+                  ...prev,
+                  [item.id]: {
+                    status: "ready",
+                    url: newUrl,
+                    history: [{ url: newUrl, createdAt: new Date().toISOString() }],
+                    historyIndex: 0,
+                  },
+                };
+              });
+            }
+            break; // success — skip retry
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error("Image failed.");
+            // Retry once on timeout/network errors
           }
-        } catch (err) {
-          if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: err instanceof Error ? err.message : "Image failed." } }));
+        }
+        if (lastError && !cancelled) {
+          setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: lastError!.message } }));
         }
       }
     })();
@@ -1762,25 +1776,29 @@ export default function TeacherView({ user }: Props) {
     }
   };
 
-  const persistCurrentImage = async (itemId: string, imageUrl: string) => {
-    if (!classId || !assignmentId || !imageUrl) return;
-    try {
-      await fetch("/api/media", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          classId,
-          assignmentId,
-          studentId: "cohort",
-          contentItemId: itemId,
-          mediaType: "image",
-          mimeType: "image/webp",
-          dataUrl: imageUrl,
-        }),
-      });
-    } catch {
-      // Best-effort — don't block navigation
-    }
+  const persistDebounceTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const persistActiveVersion = (itemId: string, versionIndex: number) => {
+    if (!classId || !assignmentId) return;
+    const timers = persistDebounceTimers.current;
+    const existing = timers.get(itemId);
+    if (existing) clearTimeout(existing);
+    timers.set(itemId, setTimeout(async () => {
+      timers.delete(itemId);
+      try {
+        await fetch("/api/media", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            classId,
+            assignmentId,
+            studentId: COHORT_STUDENT_ID,
+            contentItemId: itemId,
+            mediaType: "image",
+            versionIndex,
+          }),
+        });
+      } catch { /* best-effort */ }
+    }, 500));
   };
 
   const navigateImageVersion = (itemId: string, direction: "prev" | "next") => {
@@ -1800,8 +1818,43 @@ export default function TeacherView({ user }: Props) {
         historyIndex: newIndex,
       },
     }));
-    // Update DB so gallery reflects the currently displayed version
-    void persistCurrentImage(itemId, newUrl);
+    persistActiveVersion(itemId, newIndex);
+  };
+
+  // Dev-only: skip to Step 3 with mock data for testing
+  const devSkipToContent = () => {
+    const mockPlan: Plan = {
+      name: "Discrepant Events", strategy: "discrepant-events",
+      relevance: { "discrepant-events": 0.9 }, overallRecommendation: "discrepant-events",
+      recommendationReason: "Students show misconceptions about collision forces.",
+      summary: "Use surprising collision demos to challenge misconceptions.",
+      tldr: "Discrepant events to address force misconceptions.",
+      rationale: "Many students believe no damage means no force.",
+      tactics: ["Show collisions where no visible damage occurs but force is measurable"],
+      cadence: "One demo per class session",
+      checks: ["Can students explain why a phone survives a pillow drop?"],
+    };
+    const mockContent: ContentItem[] = [
+      { id: "mock-1", type: "engagement", title: "The Unbreakable Phone Challenge",
+        body: "Imagine dropping your phone onto a thick pillow. It looks fine afterward.\n\nQuestion: If the phone wasn't damaged, does that mean the force was weak?",
+        strategy: "discrepant-events", textModes: ["phenomenon", "questions"],
+        visualBrief: "A smartphone bouncing off a thick pillow." },
+      { id: "mock-2", type: "engagement", title: "Bug vs. Windshield",
+        body: "A tiny bug hits a car windshield at highway speed. The windshield is fine, the bug is not.\n\nIf the forces are equal, why does only the bug get squished?",
+        strategy: "discrepant-events", textModes: ["dialogue", "phenomenon"],
+        visualBrief: "A bug approaching a car windshield with equal force arrows." },
+    ];
+    // Clear any pending restore state so image generation isn't blocked
+    setIsRestoringDraftMedia(false);
+    setIsRestoringPublishedState(false);
+    try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
+    setPlan(mockPlan);
+    setSelectedStrategies(["discrepant-events"]);
+    setContent(mockContent);
+    setImages({});
+    setVideos({});
+    imageHistoryCache.clear();
+    setCurrentStep(3);
   };
 
   const [refineError, setRefineError] = useState<string | null>(null);
@@ -1825,7 +1878,7 @@ export default function TeacherView({ user }: Props) {
           answers: {},
           classId,
           assignmentId,
-          studentId: "cohort",
+          studentId: COHORT_STUDENT_ID,
           refinementPrompt: refinePrompt.trim(),
           previousImageUrl: currentImageUrl,
         }),
@@ -1907,6 +1960,12 @@ export default function TeacherView({ user }: Props) {
               <Link href="/community" className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
                 Community Gallery
               </Link>
+              {process.env.NODE_ENV === "development" && (
+                <button type="button" onClick={devSkipToContent}
+                  className="flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-1.5 text-xs font-semibold text-amber-700 shadow-sm transition hover:bg-amber-100">
+                  Dev: Skip to Step 3
+                </button>
+              )}
             </div>
           </div>
         </header>

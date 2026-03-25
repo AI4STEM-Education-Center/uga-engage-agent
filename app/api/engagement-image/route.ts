@@ -56,10 +56,7 @@ const isSafetyRejection = (error: unknown): boolean => {
   return msg.includes("safety") || msg.includes("content_policy") || msg.includes("policy") || msg.includes("moderation");
 };
 
-const prepareImageInput = async (
-  client: OpenAI,
-  imageUrl: string,
-) => {
+const prepareImageInput = async (imageUrl: string) => {
   if (imageUrl.startsWith("data:")) {
     const base64Part = imageUrl.split(",")[1];
     const buffer = Buffer.from(base64Part, "base64");
@@ -70,7 +67,7 @@ const prepareImageInput = async (
   return toFile(imgBuffer, "image.webp", { type: "image/webp" });
 };
 
-export const maxDuration = 60; // seconds – image generation can take 15-30s
+export const maxDuration = 120; // gpt-image-1.5 high quality can take 30-60s
 
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
@@ -113,7 +110,7 @@ export async function POST(request: Request) {
 
     let result;
     if (isRefine) {
-      const imageInput = await prepareImageInput(client, previousImageUrl);
+      const imageInput = await prepareImageInput(previousImageUrl);
       result = await client.images.edit({
         model,
         image: imageInput,
@@ -153,6 +150,7 @@ export async function POST(request: Request) {
           mediaType: "image",
           mimeType: "image/webp",
           dataUrl,
+          refinementPrompt: trimmedRefine,
         });
         // Prefer a shareable URL (e.g., presigned S3) for downstream video APIs.
         const persisted = await getMedia(

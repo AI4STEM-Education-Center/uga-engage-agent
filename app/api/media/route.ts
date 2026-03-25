@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMedia, listMedia, upsertMedia } from "@/lib/nosql";
+import { getMedia, listMedia, setActiveMediaVersion } from "@/lib/nosql";
 
 /**
  * GET /api/media
@@ -70,42 +70,36 @@ export async function GET(request: NextRequest) {
 /**
  * PUT /api/media
  *
- * Persist or update a media record (e.g. when the teacher selects a
- * different image version to be the "active" one for gallery/video).
+ * Switch the active version for a media record.
+ * Used when the teacher navigates image history.
  */
 export async function PUT(request: NextRequest) {
   try {
-    const { classId, assignmentId, studentId, contentItemId, mediaType, mimeType, dataUrl } =
+    const { classId, assignmentId, studentId, contentItemId, mediaType, versionIndex } =
       (await request.json()) as {
         classId?: string;
         assignmentId?: string;
         studentId?: string;
         contentItemId?: string;
         mediaType?: "image" | "video";
-        mimeType?: string;
-        dataUrl?: string;
+        versionIndex?: number;
       };
 
-    if (!classId || !assignmentId || !studentId || !contentItemId || !mediaType || !dataUrl) {
+    if (!classId || !assignmentId || !studentId || !contentItemId || !mediaType || versionIndex === undefined) {
       return NextResponse.json(
-        { error: "classId, assignmentId, studentId, contentItemId, mediaType, and dataUrl are required." },
+        { error: "classId, assignmentId, studentId, contentItemId, mediaType, and versionIndex are required." },
         { status: 400 },
       );
     }
 
-    await upsertMedia({
-      classId,
-      assignmentId,
-      studentId,
-      contentItemId,
-      mediaType,
-      mimeType: mimeType ?? "image/webp",
-      dataUrl,
-    });
+    const updated = await setActiveMediaVersion(classId, assignmentId, studentId, contentItemId, mediaType, versionIndex);
+    if (!updated) {
+      return NextResponse.json({ error: "Media record not found." }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to persist media.";
+    const message = error instanceof Error ? error.message : "Failed to update active version.";
     console.error("media PUT error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
