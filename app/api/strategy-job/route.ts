@@ -1,0 +1,99 @@
+import crypto from "node:crypto";
+
+import { NextResponse } from "next/server";
+
+import {
+  enqueueCohortJobStudents,
+  isCohortAnalysisQueueConfigured,
+} from "@/lib/cohort-analysis-queue";
+import { createCohortJob, setCohortJobStatus } from "@/lib/nosql";
+
+type Student = {
+  id: string;
+  name: string;
+  assignment?: string;
+  answers: Record<string, string | undefined>;
+};
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  try {
+    if (!isCohortAnalysisQueueConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Cohort analysis queue is not configured on this environment.",
+        },
+        { status: 501 },
+      );
+    }
+
+    const { classId, assignmentId, students = [] } = (await request.json()) as {
+      classId?: string;
+      assignmentId?: string;
+      students?: Student[];
+    };
+
+    const classKey = classId?.trim();
+    const assignmentKey = assignmentId?.trim();
+
+    if (!classKey || !assignmentKey) {
+      return NextResponse.json(
+        { error: "classId and assignmentId are required." },
+        { status: 400 },
+      );
+    }
+
+    const normalizedStudents = (students ?? []).filter(
+      (student) => student?.id && student?.name,
+    );
+    if (normalizedStudents.length === 0) {
+      return NextResponse.json(
+        { error: "At least one student is required." },
+        { status: 400 },
+      );
+    }
+
+    const jobId = crypto.randomUUID();
+    await createCohortJob(
+      jobId,
+      classKey,
+      assignmentKey,
+      normalizedStudents.length,
+    );
+
+    try {
+      await enqueueCohortJobStudents({
+        jobId,
+        classId: classKey,
+        assignmentId: assignmentKey,
+        totalStudents: normalizedStudents.length,
+        students: normalizedStudents,
+      });
+    } catch (error) {
+      await setCohortJobStatus(
+        jobId,
+        "failed_to_queue",
+        error instanceof Error ? error.message : "Failed to queue cohort analysis.",
+      );
+      throw error;
+    }
+
+    return NextResponse.json(
+      {
+        jobId,
+        queuedStudents: normalizedStudents.length,
+        totalStudents: normalizedStudents.length,
+        status: "queued",
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to start cohort analysis.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

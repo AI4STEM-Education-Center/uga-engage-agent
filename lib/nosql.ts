@@ -71,6 +71,34 @@ type ContentRatingRecord = {
   rated_at: string;
 };
 
+export type CohortJobRecord = {
+  job_id: string;
+  class_id: string;
+  assignment_id: string;
+  total_students: number;
+  processed_students: number;
+  completed_students: number;
+  failed_students: number;
+  status: "queued" | "running" | "completed" | "completed_with_errors" | "failed_to_queue";
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CohortJobStudentRecord = {
+  job_id: string;
+  class_id: string;
+  assignment_id: string;
+  student_id: string;
+  student_name: string;
+  status: "completed" | "failed";
+  source?: "cache" | "model" | null;
+  plan_json?: string;
+  timing?: Record<string, unknown>;
+  error?: string;
+  updated_at: string;
+};
+
 type Store = {
   strategy_cache: Record<string, StrategyCacheRecord>;
   teacher_annotations: TeacherAnnotation[];
@@ -79,6 +107,8 @@ type Store = {
   student_answers: StudentAnswerRecord[];
   content_publish: ContentPublishRecord[];
   content_ratings: ContentRatingRecord[];
+  cohort_jobs: CohortJobRecord[];
+  cohort_job_students: CohortJobStudentRecord[];
 };
 
 type TeacherAnnotation = {
@@ -108,6 +138,8 @@ const emptyStore: Store = {
   student_answers: [],
   content_publish: [],
   content_ratings: [],
+  cohort_jobs: [],
+  cohort_job_students: [],
 };
 const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "engage-nosql.json");
@@ -222,6 +254,12 @@ const loadStore = async () => {
       }
       if (!Array.isArray(parsed.content_ratings)) {
         parsed.content_ratings = [];
+      }
+      if (!Array.isArray(parsed.cohort_jobs)) {
+        parsed.cohort_jobs = [];
+      }
+      if (!Array.isArray(parsed.cohort_job_students)) {
+        parsed.cohort_job_students = [];
       }
       storeCache = parsed;
       return parsed;
@@ -406,6 +444,210 @@ export const listCachedPlans = async (
     });
   }
   return records;
+};
+
+const jobPk = (jobId: string) => `JOB#${jobId}`;
+
+const normalizeCohortJob = (
+  jobId: string,
+  item: Record<string, unknown>,
+): CohortJobRecord => ({
+  job_id: jobId,
+  class_id: (item.source_class_id as string) ?? "",
+  assignment_id: (item.source_assignment_id as string) ?? "",
+  total_students: Number(item.total_students ?? 0),
+  processed_students: Number(item.processed_students ?? 0),
+  completed_students: Number(item.completed_students ?? 0),
+  failed_students: Number(item.failed_students ?? 0),
+  status: ((item.status as string) ??
+    "queued") as CohortJobRecord["status"],
+  error_message: (item.error_message as string) ?? undefined,
+  created_at: (item.created_at as string) ?? "",
+  updated_at: (item.updated_at as string) ?? "",
+});
+
+const normalizeCohortJobStudent = (
+  jobId: string,
+  item: Record<string, unknown>,
+): CohortJobStudentRecord => ({
+  job_id: jobId,
+  class_id: (item.source_class_id as string) ?? "",
+  assignment_id: (item.source_assignment_id as string) ?? "",
+  student_id: toPlainStudentId(item.student_id as string, item.student_id as string),
+  student_name: (item.student_name as string) ?? "",
+  status: ((item.status as string) ??
+    "failed") as CohortJobStudentRecord["status"],
+  source: ((item.source as string) ?? null) as CohortJobStudentRecord["source"],
+  plan_json: (item.plan_json as string) ?? undefined,
+  timing: (item.timing as Record<string, unknown>) ?? undefined,
+  error: (item.error as string) ?? undefined,
+  updated_at: (item.updated_at as string) ?? "",
+});
+
+export const createCohortJob = async (
+  jobId: string,
+  classId: string,
+  assignmentId: string,
+  totalStudents: number,
+): Promise<CohortJobRecord> => {
+  const timestamp = new Date().toISOString();
+  const record: CohortJobRecord = {
+    job_id: jobId,
+    class_id: classId,
+    assignment_id: assignmentId,
+    total_students: totalStudents,
+    processed_students: 0,
+    completed_students: 0,
+    failed_students: 0,
+    status: "queued",
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (client) {
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: jobPk(jobId),
+            [skField]: "META",
+            record_type: "cohort_job",
+            source_class_id: classId,
+            source_assignment_id: assignmentId,
+            total_students: totalStudents,
+            processed_students: 0,
+            completed_students: 0,
+            failed_students: 0,
+            status: "queued",
+            created_at: timestamp,
+            updated_at: timestamp,
+          },
+        }),
+      );
+    }
+    return record;
+  }
+
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const nextJobs = store.cohort_jobs.filter((job) => job.job_id !== jobId);
+    nextJobs.push(record);
+    store.cohort_jobs = nextJobs;
+    await persistStore(store);
+  });
+
+  return record;
+};
+
+export const setCohortJobStatus = async (
+  jobId: string,
+  status: CohortJobRecord["status"],
+  errorMessage?: string,
+) => {
+  const updatedAt = new Date().toISOString();
+
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (client) {
+      const current = await getCohortJob(jobId);
+      if (!current.job) {
+        return null;
+      }
+      const nextJob: CohortJobRecord = {
+        ...current.job,
+        status,
+        ...(errorMessage ? { error_message: errorMessage } : {}),
+        updated_at: updatedAt,
+      };
+      await client.send(
+        new PutCommand({
+          TableName: dynamoTableName,
+          Item: {
+            [pkField]: jobPk(jobId),
+            [skField]: "META",
+            record_type: "cohort_job",
+            source_class_id: nextJob.class_id,
+            source_assignment_id: nextJob.assignment_id,
+            total_students: nextJob.total_students,
+            processed_students: nextJob.processed_students,
+            completed_students: nextJob.completed_students,
+            failed_students: nextJob.failed_students,
+            status: nextJob.status,
+            error_message: nextJob.error_message,
+            created_at: nextJob.created_at,
+            updated_at: nextJob.updated_at,
+          },
+        }),
+      );
+      return nextJob;
+    }
+    return null;
+  }
+
+  let nextJob: CohortJobRecord | null = null;
+  await withWriteLock(async () => {
+    const store = await loadStore();
+    const index = store.cohort_jobs.findIndex((job) => job.job_id === jobId);
+    if (index < 0) {
+      return;
+    }
+    nextJob = {
+      ...store.cohort_jobs[index],
+      status,
+      ...(errorMessage ? { error_message: errorMessage } : {}),
+      updated_at: updatedAt,
+    };
+    store.cohort_jobs[index] = nextJob;
+    await persistStore(store);
+  });
+  return nextJob;
+};
+
+export const getCohortJob = async (
+  jobId: string,
+): Promise<{ job: CohortJobRecord | null; students: CohortJobStudentRecord[] }> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) {
+      return { job: null, students: [] };
+    }
+
+    const result = await client.send(
+      new QueryCommand({
+        TableName: dynamoTableName,
+        KeyConditionExpression: "#pk = :pk",
+        ExpressionAttributeNames: {
+          "#pk": pkField,
+        },
+        ExpressionAttributeValues: {
+          ":pk": jobPk(jobId),
+        },
+      }),
+    );
+
+    let job: CohortJobRecord | null = null;
+    const students: CohortJobStudentRecord[] = [];
+
+    for (const item of result.Items ?? []) {
+      if (item.record_type === "cohort_job") {
+        job = normalizeCohortJob(jobId, item);
+        continue;
+      }
+      if (item.record_type === "cohort_job_student") {
+        students.push(normalizeCohortJobStudent(jobId, item));
+      }
+    }
+
+    return { job, students };
+  }
+
+  const store = await loadStore();
+  return {
+    job: store.cohort_jobs.find((record) => record.job_id === jobId) ?? null,
+    students: store.cohort_job_students.filter((record) => record.job_id === jobId),
+  };
 };
 
 export const recordTeacherAnnotation = async (

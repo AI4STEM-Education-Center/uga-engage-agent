@@ -46,8 +46,39 @@ type StrategyBatchResponse = {
   error?: string;
 };
 
+type StrategyJobStartResponse = {
+  jobId?: string;
+  queuedStudents?: number;
+  totalStudents?: number;
+  status?: "queued";
+  error?: string;
+};
+
+type StrategyJobStatusResponse = {
+  job?: {
+    jobId?: string;
+    classId?: string;
+    assignmentId?: string;
+    totalStudents?: number;
+    processedStudents?: number;
+    completedStudents?: number;
+    failedStudents?: number;
+    status?: "queued" | "running" | "completed" | "completed_with_errors" | "failed_to_queue";
+    errorMessage?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+  results?: StudentStrategyResult[];
+  errors?: Array<{ id?: string; name?: string; error?: string }>;
+  distribution?: Record<string, number>;
+  error?: string;
+};
+
+type StrategyJobStatus = NonNullable<StrategyJobStatusResponse["job"]>["status"];
+
 const COHORT_ANALYSIS_CHUNK_SIZE = 4;
 const COHORT_ANALYSIS_MAX_ATTEMPTS = 2;
+const COHORT_ANALYSIS_JOB_POLL_MS = 1500;
 
 const collectPublishedMedia = (
   items: PublishedContentPayloadItem[] | undefined,
@@ -209,6 +240,13 @@ const formatStrategyBatchError = (
 
   return `Cohort analysis failed (HTTP ${status}).`;
 };
+
+const isTerminalCohortJobStatus = (
+  status: StrategyJobStatus | undefined,
+) =>
+  status === "completed" ||
+  status === "completed_with_errors" ||
+  status === "failed_to_queue";
 
 const chunkItems = <T,>(items: T[], size: number) => {
   const chunks: T[][] = [];
@@ -1041,6 +1079,115 @@ export default function TeacherView({ user }: Props) {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [loadingCohort]);
 
+  const runSynchronousCohortAnalysis = async ({
+    studentsForApi,
+    uncachedStudents,
+    resultsMap,
+  }: {
+    studentsForApi: Array<{
+      id: string;
+      name: string;
+      assignment?: string;
+      answers: Record<string, string | undefined>;
+    }>;
+    uncachedStudents: Array<{
+      id: string;
+      name: string;
+      assignment?: string;
+      answers: Record<string, string | undefined>;
+    }>;
+    resultsMap: Map<string, StudentStrategyResult>;
+  }) => {
+    const studentChunks = chunkItems(
+      uncachedStudents,
+      COHORT_ANALYSIS_CHUNK_SIZE,
+    );
+
+    for (let chunkIndex = 0; chunkIndex < studentChunks.length; chunkIndex += 1) {
+      let pendingStudents = studentChunks[chunkIndex];
+
+      for (let attempt = 1; attempt <= COHORT_ANALYSIS_MAX_ATTEMPTS; attempt += 1) {
+        const batchStart = chunkIndex * COHORT_ANALYSIS_CHUNK_SIZE + 1;
+        const batchEnd = Math.min(
+          batchStart + pendingStudents.length - 1,
+          uncachedStudents.length,
+        );
+
+        setCohortProgress({
+          processed: resultsMap.size,
+          total: studentsForApi.length,
+          currentName:
+            attempt === 1
+              ? `Analyzing batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${uncachedStudents.length} uncached students)...`
+              : `Retrying ${pendingStudents.length} student${pendingStudents.length === 1 ? "" : "s"} in batch ${chunkIndex + 1} of ${studentChunks.length}...`,
+        });
+
+        const res = await fetch("/api/strategy-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            students: pendingStudents,
+            classId,
+            assignmentId,
+          }),
+        });
+        const data = await parseJsonResponse<StrategyBatchResponse>(res);
+
+        for (const result of data?.results ?? []) {
+          resultsMap.set(result.id, result);
+        }
+
+        const orderedResults = studentsForApi
+          .filter((student) => resultsMap.has(student.id))
+          .map((student) => resultsMap.get(student.id) as StudentStrategyResult);
+        setCohortResults(orderedResults);
+        setCohortProgress({
+          processed: orderedResults.length,
+          total: studentsForApi.length,
+          currentName:
+            orderedResults.length < studentsForApi.length
+              ? `Completed ${orderedResults.length} of ${studentsForApi.length} students.`
+              : "Finalizing cohort recommendation...",
+        });
+
+        const failedStudents = pendingStudents.filter((student) =>
+          (data?.errors ?? []).some((error) => error.id === student.id),
+        );
+
+        if (res.ok && failedStudents.length === 0) {
+          break;
+        }
+
+        const isRetryable =
+          res.status === 0 ||
+          res.status === 502 ||
+          res.status === 503 ||
+          res.status === 504 ||
+          failedStudents.length > 0;
+        if (isRetryable && attempt < COHORT_ANALYSIS_MAX_ATTEMPTS) {
+          pendingStudents = failedStudents.length > 0 ? failedStudents : pendingStudents;
+          await delay(1000 * attempt);
+          continue;
+        }
+
+        if (failedStudents.length > 0) {
+          const failedNames = failedStudents.map((student) => student.name).join(", ");
+          throw new Error(
+            `Failed to analyze ${failedStudents.length} student${failedStudents.length === 1 ? "" : "s"} after retry: ${failedNames}.`,
+          );
+        }
+
+        if (!res.ok) {
+          throw new Error(
+            formatStrategyBatchError(res.status, data?.error),
+          );
+        }
+
+        throw new Error("Cohort analysis returned an invalid response.");
+      }
+    }
+  };
+
   const requestCohortAnalysis = async () => {
     if (!classId || !assignmentId) return;
     if (studentAnswers.length === 0) {
@@ -1061,6 +1208,7 @@ export default function TeacherView({ user }: Props) {
     setCohortProgress({ processed: 0, total: studentAnswers.length, currentName: "Loading cache..." });
 
     try {
+      let cohortWarning: string | null = null;
       const studentsForApi = studentAnswers.map((sa) => ({
         id: sa.student_id,
         name: sa.student_name,
@@ -1105,91 +1253,95 @@ export default function TeacherView({ user }: Props) {
       const uncachedStudents = studentsForApi.filter(
         (student) => !cachedMap.has(student.id),
       );
-      const studentChunks = chunkItems(
-        uncachedStudents,
-        COHORT_ANALYSIS_CHUNK_SIZE,
-      );
+      if (uncachedStudents.length > 0) {
+        const startRes = await fetch("/api/strategy-job", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            students: uncachedStudents,
+            classId,
+            assignmentId,
+          }),
+        });
+        const startData = await parseJsonResponse<StrategyJobStartResponse>(startRes);
 
-      for (let chunkIndex = 0; chunkIndex < studentChunks.length; chunkIndex += 1) {
-        let pendingStudents = studentChunks[chunkIndex];
-
-        for (let attempt = 1; attempt <= COHORT_ANALYSIS_MAX_ATTEMPTS; attempt += 1) {
-          const batchStart = chunkIndex * COHORT_ANALYSIS_CHUNK_SIZE + 1;
-          const batchEnd = Math.min(
-            batchStart + pendingStudents.length - 1,
-            uncachedStudents.length,
-          );
-
-          setCohortProgress({
-            processed: resultsMap.size,
-            total: studentsForApi.length,
-            currentName:
-              attempt === 1
-                ? `Analyzing batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${uncachedStudents.length} uncached students)...`
-                : `Retrying ${pendingStudents.length} student${pendingStudents.length === 1 ? "" : "s"} in batch ${chunkIndex + 1} of ${studentChunks.length}...`,
+        if (startRes.status === 501) {
+          await runSynchronousCohortAnalysis({
+            studentsForApi,
+            uncachedStudents,
+            resultsMap,
           });
-          const res = await fetch("/api/strategy-batch", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              students: pendingStudents,
-              classId,
-              assignmentId,
-            }),
-          });
-          const data = await parseJsonResponse<StrategyBatchResponse>(res);
-
-          for (const result of data?.results ?? []) {
-            resultsMap.set(result.id, result);
-          }
-
-          const orderedResults = studentsForApi
-            .filter((student) => resultsMap.has(student.id))
-            .map((student) => resultsMap.get(student.id) as StudentStrategyResult);
-          setCohortResults(orderedResults);
-          setCohortProgress({
-            processed: orderedResults.length,
-            total: studentsForApi.length,
-            currentName:
-              orderedResults.length < studentsForApi.length
-                ? `Completed ${orderedResults.length} of ${studentsForApi.length} students.`
-                : "Finalizing cohort recommendation...",
-          });
-
-          const failedStudents = pendingStudents.filter((student) =>
-            (data?.errors ?? []).some((error) => error.id === student.id),
-          );
-
-          if (res.ok && failedStudents.length === 0) {
-            break;
-          }
-
-          const isRetryable =
-            res.status === 0 ||
-            res.status === 502 ||
-            res.status === 503 ||
-            res.status === 504 ||
-            failedStudents.length > 0;
-          if (isRetryable && attempt < COHORT_ANALYSIS_MAX_ATTEMPTS) {
-            pendingStudents = failedStudents.length > 0 ? failedStudents : pendingStudents;
-            await delay(1000 * attempt);
-            continue;
-          }
-
-          if (failedStudents.length > 0) {
-            const failedNames = failedStudents.map((student) => student.name).join(", ");
+        } else {
+          if (!startRes.ok || !startData?.jobId) {
             throw new Error(
-              `Failed to analyze ${failedStudents.length} student${failedStudents.length === 1 ? "" : "s"} after retry: ${failedNames}.`,
+              startData?.error ?? "Failed to start cohort analysis.",
             );
           }
 
-          if (!res.ok) {
-            throw new Error(
-              formatStrategyBatchError(res.status, data?.error),
+          for (;;) {
+            const statusRes = await fetch(
+              `/api/strategy-job/${encodeURIComponent(startData.jobId)}`,
+              {
+                cache: "no-store",
+              },
             );
-          }
+            const statusData = await parseJsonResponse<StrategyJobStatusResponse>(statusRes);
 
-          throw new Error("Cohort analysis returned an invalid response.");
+            if (!statusRes.ok || !statusData?.job) {
+              throw new Error(
+                statusData?.error ?? "Failed to load cohort analysis status.",
+              );
+            }
+
+            for (const result of statusData.results ?? []) {
+              resultsMap.set(result.id, result);
+            }
+
+            const orderedResults = studentsForApi
+              .filter((student) => resultsMap.has(student.id))
+              .map((student) => resultsMap.get(student.id) as StudentStrategyResult);
+            setCohortResults(orderedResults);
+
+            const processedStudents = statusData.job.processedStudents ?? 0;
+            const queuedStudents = statusData.job.totalStudents ?? uncachedStudents.length;
+            const terminal = isTerminalCohortJobStatus(statusData.job.status);
+
+            setCohortProgress({
+              processed: Math.min(
+                studentsForApi.length,
+                initialResults.length + processedStudents,
+              ),
+              total: studentsForApi.length,
+              currentName: terminal
+                ? "Finalizing cohort recommendation..."
+                : statusData.job.status === "queued"
+                  ? `Queued ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"} for analysis...`
+                  : `Analyzing ${processedStudents} of ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"}...`,
+            });
+
+            if (terminal) {
+              if (statusData.job.status === "failed_to_queue") {
+                throw new Error(
+                  statusData.job.errorMessage ?? "Failed to queue cohort analysis.",
+                );
+              }
+
+              if ((statusData.job.failedStudents ?? 0) > 0) {
+                const failedNames = (statusData.errors ?? [])
+                  .map((error) => error.name)
+                  .filter((name): name is string => Boolean(name))
+                  .join(", ");
+                cohortWarning =
+                  failedNames.length > 0
+                    ? `Finished with ${statusData.job.failedStudents} failed student${statusData.job.failedStudents === 1 ? "" : "s"}: ${failedNames}.`
+                    : `Finished with ${statusData.job.failedStudents} failed student${statusData.job.failedStudents === 1 ? "" : "s"}.`;
+              }
+
+              break;
+            }
+
+            await delay(COHORT_ANALYSIS_JOB_POLL_MS);
+          }
         }
       }
 
@@ -1207,6 +1359,10 @@ export default function TeacherView({ user }: Props) {
       if (masterPlan) {
         setPlan(masterPlan);
         setSelectedStrategies([masterPlan.strategy]);
+      }
+
+      if (cohortWarning) {
+        setError(cohortWarning);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error.");
