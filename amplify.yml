@@ -14,6 +14,7 @@ frontend:
         - echo "ENGAGE_AWS_REGION=$ENGAGE_AWS_REGION" >> .env.production
         - echo "ENGAGE_AWS_ACCESS_KEY_ID=$ENGAGE_AWS_ACCESS_KEY_ID" >> .env.production
         - echo "ENGAGE_AWS_SECRET_ACCESS_KEY=$ENGAGE_AWS_SECRET_ACCESS_KEY" >> .env.production
+        - echo "ENGAGE_S3_BUCKET=$ENGAGE_S3_BUCKET" >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
