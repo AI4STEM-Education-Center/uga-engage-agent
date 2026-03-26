@@ -40,18 +40,23 @@ const chunkItems = <T,>(items: T[], size: number) => {
   return chunks;
 };
 
+const buildBatchEntryId = (chunkIndex: number, studentIndex: number) =>
+  `student-${chunkIndex}-${studentIndex}`;
+
 export const isCohortAnalysisQueueConfigured = () => Boolean(queueUrl);
 
 export const enqueueCohortJobStudents = async ({
   jobId,
   classId,
   assignmentId,
+  lessonNumber,
   totalStudents,
   students,
 }: {
   jobId: string;
   classId: string;
   assignmentId: string;
+  lessonNumber: number;
   totalStudents: number;
   students: Array<{
     id: string;
@@ -70,16 +75,18 @@ export const enqueueCohortJobStudents = async ({
   }
 
   const chunks = chunkItems(students, 10);
-  for (const chunk of chunks) {
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+    const chunk = chunks[chunkIndex];
     const response = await client.send(
       new SendMessageBatchCommand({
         QueueUrl: queueUrl,
-        Entries: chunk.map((student) => ({
-          Id: student.id,
+        Entries: chunk.map((student, studentIndex) => ({
+          Id: buildBatchEntryId(chunkIndex, studentIndex),
           MessageBody: JSON.stringify({
             jobId,
             classId,
             assignmentId,
+            lessonNumber,
             totalStudents,
             student,
           }),

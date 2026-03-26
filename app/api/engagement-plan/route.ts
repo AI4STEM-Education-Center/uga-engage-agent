@@ -2,6 +2,10 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
 import { getCachedPlanJson, upsertCachedPlanJson } from "@/lib/nosql";
+import {
+  deserializeCachedPlan,
+  serializeCachedPlan,
+} from "@/lib/strategy-plan-cache";
 
 type Answers = Record<string, string | undefined>;
 
@@ -144,10 +148,12 @@ export async function POST(request: Request) {
         console.info(
           `engagement-plan cache HIT for ${classKey}/${assignmentKey}/${studentKey}`,
         );
-        const cachedPlan = JSON.parse(cachedPlanJson) as Plan;
-        cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
-        const plan = ensurePlanFields(cachedPlan);
-        return NextResponse.json({ plan, cached: true });
+        const cachedPlan = deserializeCachedPlan<Plan>(cachedPlanJson);
+        if (cachedPlan) {
+          cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
+          const plan = ensurePlanFields(cachedPlan);
+          return NextResponse.json({ plan, cached: true });
+        }
       }
     }
 
@@ -180,7 +186,7 @@ export async function POST(request: Request) {
         classKey,
         assignmentKey,
         studentKey,
-        JSON.stringify(plan),
+        serializeCachedPlan(plan),
       );
       console.info(
         `engagement-plan cached for ${classKey}/${assignmentKey}/${studentKey}`,

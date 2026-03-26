@@ -90,6 +90,7 @@ export async function GET(request: NextRequest) {
 
     let savedToDb = false;
     let saveError: string | null = null;
+    let responseUrl = videoUrl;
 
     // Persist video to S3/DB before responding — must be awaited because
     // serverless Lambdas freeze after the response is sent.
@@ -125,6 +126,9 @@ export async function GET(request: NextRequest) {
           "video",
         );
         savedToDb = Boolean(persisted);
+        if (persisted?.data_url) {
+          responseUrl = persisted.data_url;
+        }
         if (!savedToDb) {
           saveError = "Video save did not persist to the media store.";
           console.error("Video persist failed:", saveError);
@@ -141,7 +145,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       done: true,
-      url: videoUrl,
+      url: responseUrl,
       contentItemId,
       savedToDb,
       ...(saveError ? { saveError } : {}),

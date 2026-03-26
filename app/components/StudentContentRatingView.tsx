@@ -3,18 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import type { UserContext } from "@/lib/auth";
 import type { ContentItem, TextMode } from "@/lib/types";
+import {
+  buildPublishedContentState,
+  type MediaRecordResponse,
+  type PublishedItemResponse,
+  type SharedContentMedia,
+} from "@/lib/published-content";
 
 type Props = {
   user: UserContext;
-};
-
-type PublishedItem = {
-  content_item_id: string;
-  content_json: string;
-  media?: {
-    image?: string;
-    video?: string;
-  };
 };
 
 const RATING_LABELS = ["", "Not engaging", "Slightly engaging", "Moderately engaging", "Very engaging", "Extremely engaging"];
@@ -35,7 +32,7 @@ const getContentModeLabels = (item: ContentItem) => {
 
 export default function StudentContentRatingView({ user }: Props) {
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
-  const [media, setMedia] = useState<Record<string, { image?: string; video?: string }>>({});
+  const [media, setMedia] = useState<Record<string, SharedContentMedia>>({});
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [savedRatings, setSavedRatings] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -45,71 +42,110 @@ export default function StudentContentRatingView({ user }: Props) {
   const classId = user.classId;
   const assignmentId = user.assignmentId;
 
-  const loadContent = useCallback(async () => {
+  const loadPublishedContent = useCallback(async (silent = false) => {
     if (!classId || !assignmentId) {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (!silent) {
+      setLoading(true);
+    }
+
+    try {
+      const [pubRes, mediaRes] = await Promise.all([
+        fetch(
+          `/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`,
+        ),
+        fetch(
+          `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`,
+        ),
+      ]);
+
+      if (!pubRes.ok) {
+        throw new Error("Failed to load content.");
+      }
+
+      const pubData = (await pubRes.json()) as { items?: PublishedItemResponse[] };
+      const mediaData = mediaRes.ok
+        ? ((await mediaRes.json()) as { results?: MediaRecordResponse[] })
+        : { results: [] };
+      const publishedState = buildPublishedContentState(
+        pubData.items ?? [],
+        mediaData.results ?? [],
+      );
+
+      setContentItems(publishedState.contentItems);
+      setMedia(publishedState.mediaByItemId);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load content.");
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }, [assignmentId, classId]);
+
+  const loadRatings = useCallback(async () => {
+    if (!classId || !assignmentId) {
       return;
     }
 
     try {
-      // Fetch published content
-      const pubRes = await fetch(
-        `/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`,
-      );
-      const pubData = await pubRes.json();
-      const items: PublishedItem[] = pubData.items ?? [];
-
-      const parsed: ContentItem[] = items.map((item) => {
-        try {
-          return JSON.parse(item.content_json) as ContentItem;
-        } catch {
-          return {
-            id: item.content_item_id,
-            type: "unknown",
-            title: "Content",
-            body: "",
-            strategy: "",
-          };
-        }
-      });
-      setContentItems(parsed);
-
-      const mediaMap = items.reduce<Record<string, { image?: string; video?: string }>>((accumulator, item) => {
-        if (!item.media) {
-          return accumulator;
-        }
-
-        accumulator[item.content_item_id] = {
-          ...(item.media.image ? { image: item.media.image } : {}),
-          ...(item.media.video ? { video: item.media.video } : {}),
-        };
-        return accumulator;
-      }, {});
-      setMedia(mediaMap);
-
-      // Fetch existing ratings
       const ratingRes = await fetch(
         `/api/content-rating?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${encodeURIComponent(user.userId)}`,
       );
-      if (ratingRes.ok) {
-        const ratingData = await ratingRes.json();
-        const existing: Record<string, number> = {};
-        for (const r of ratingData.ratings ?? []) {
-          existing[r.content_item_id] = r.rating;
-        }
-        setRatings(existing);
-        setSavedRatings(existing);
+      if (!ratingRes.ok) {
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load content.");
-    } finally {
-      setLoading(false);
+
+      const ratingData = await ratingRes.json();
+      const existing: Record<string, number> = {};
+      for (const r of ratingData.ratings ?? []) {
+        existing[r.content_item_id] = r.rating;
+      }
+      setRatings(existing);
+      setSavedRatings(existing);
+    } catch {
+      // Rating history is best-effort and should not block content rendering.
     }
-  }, [classId, assignmentId, user.userId]);
+  }, [assignmentId, classId, user.userId]);
 
   useEffect(() => {
-    loadContent();
-  }, [loadContent]);
+    void Promise.all([
+      loadPublishedContent(),
+      loadRatings(),
+    ]);
+  }, [loadPublishedContent, loadRatings]);
+
+  useEffect(() => {
+    if (!classId || !assignmentId) {
+      return;
+    }
+
+    const refreshContent = () => {
+      void loadPublishedContent(true);
+    };
+
+    const intervalId = window.setInterval(refreshContent, 15000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshContent();
+      }
+    };
+
+    window.addEventListener("focus", refreshContent);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshContent);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [assignmentId, classId, loadPublishedContent]);
 
   const submitRating = async (contentItemId: string, rating: number) => {
     if (!classId || !assignmentId) return;

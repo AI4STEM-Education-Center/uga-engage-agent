@@ -975,6 +975,18 @@ export default function TeacherView({ user }: Props) {
 
   const selectLesson = async (lessonNumber: number) => {
     setSelectedLesson(lessonNumber);
+    setPlan(null);
+    setSelectedStrategies([]);
+    setAnnotationDecision(null);
+    setAnnotationReason("");
+    setAnnotationStatus("idle");
+    setContent([]);
+    setImages({});
+    setVideos({});
+    setSelectedForPublish(new Set());
+    setPublishedContentIds(new Set());
+    setCohortResults([]);
+    setCohortDistribution({});
     const res = await fetch(`/api/lessons/${lessonNumber}`);
     const data = await res.json();
     setQuizItems(data.quiz_items ?? []);
@@ -1031,13 +1043,13 @@ export default function TeacherView({ user }: Props) {
   };
 
   const loadStudentAnswers = async (options?: { silent?: boolean }) => {
-    if (!classId || !assignmentId) return;
+    if (!classId || !assignmentId || !selectedLesson) return;
     const silent = options?.silent ?? false;
     if (!silent) {
       setLoadingAnswers(true);
     }
     try {
-      const res = await fetch(`/api/student-answers?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`);
+      const res = await fetch(`/api/student-answers?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&lessonNumber=${encodeURIComponent(selectedLesson)}`);
       const data = await res.json();
       setStudentAnswers(data.answers ?? []);
     } catch {
@@ -1063,7 +1075,7 @@ export default function TeacherView({ user }: Props) {
 
     return () => window.clearInterval(intervalId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, quizStatus, classId, assignmentId]);
+  }, [currentStep, quizStatus, classId, assignmentId, selectedLesson]);
 
   useEffect(() => {
     if (!loadingCohort) {
@@ -1080,10 +1092,12 @@ export default function TeacherView({ user }: Props) {
   }, [loadingCohort]);
 
   const runSynchronousCohortAnalysis = async ({
+    lessonNumber,
     studentsForApi,
     uncachedStudents,
     resultsMap,
   }: {
+    lessonNumber: number;
     studentsForApi: Array<{
       id: string;
       name: string;
@@ -1129,6 +1143,7 @@ export default function TeacherView({ user }: Props) {
             students: pendingStudents,
             classId,
             assignmentId,
+            lessonNumber,
           }),
         });
         const data = await parseJsonResponse<StrategyBatchResponse>(res);
@@ -1190,6 +1205,11 @@ export default function TeacherView({ user }: Props) {
 
   const requestCohortAnalysis = async () => {
     if (!classId || !assignmentId) return;
+    if (!selectedLesson) {
+      setError("Select a lesson before generating strategies.");
+      return;
+    }
+    const lessonNumber = selectedLesson;
     if (studentAnswers.length === 0) {
       setError("No student answers available. Wait for students to submit.");
       return;
@@ -1212,11 +1232,11 @@ export default function TeacherView({ user }: Props) {
       const studentsForApi = studentAnswers.map((sa) => ({
         id: sa.student_id,
         name: sa.student_name,
-        assignment: `Lesson ${selectedLesson}`,
+        assignment: `Lesson ${lessonNumber}`,
         answers: sa.answers,
       }));
 
-      const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`;
+      const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&lessonNumber=${encodeURIComponent(lessonNumber)}`;
       const cacheRes = await fetch(cacheUrl);
       let cacheData: { results?: Array<{ studentId?: string; plan?: unknown }> } = { results: [] };
       if (cacheRes.ok) {
@@ -1261,12 +1281,14 @@ export default function TeacherView({ user }: Props) {
             students: uncachedStudents,
             classId,
             assignmentId,
+            lessonNumber,
           }),
         });
         const startData = await parseJsonResponse<StrategyJobStartResponse>(startRes);
 
         if (startRes.status === 501) {
           await runSynchronousCohortAnalysis({
+            lessonNumber,
             studentsForApi,
             uncachedStudents,
             resultsMap,
@@ -1373,6 +1395,10 @@ export default function TeacherView({ user }: Props) {
 
   const requestContent = async () => {
     if (!plan || selectedStrategies.length === 0) return;
+    if (!selectedLesson) {
+      setError("Select a lesson before generating content.");
+      return;
+    }
     setLoadingContent(true);
     setError(null);
     setContent([]);
@@ -1381,8 +1407,7 @@ export default function TeacherView({ user }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          answers: {},
-          plan,
+          lessonNumber: selectedLesson,
           selectedStrategies,
         }),
       });
@@ -1512,7 +1537,7 @@ export default function TeacherView({ user }: Props) {
 
   // Image generation effect
   useEffect(() => {
-    if (isRestoringStep3State || !content.length) return;
+    if (isRestoringStep3State || !content.length || !selectedLesson) return;
     const pending = content.filter((item) => !images[item.id]?.status);
     if (pending.length === 0) return;
 
@@ -1530,7 +1555,13 @@ export default function TeacherView({ user }: Props) {
           const res = await fetch("/api/engagement-image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ item, plan, answers: {}, classId, assignmentId, studentId: "cohort" }),
+            body: JSON.stringify({
+              item,
+              lessonNumber: selectedLesson,
+              classId,
+              assignmentId,
+              studentId: "cohort",
+            }),
           });
           const text = await res.text();
           let data: Record<string, unknown>;
@@ -1545,7 +1576,7 @@ export default function TeacherView({ user }: Props) {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, isRestoringStep3State]);
+  }, [content, isRestoringStep3State, selectedLesson]);
 
   const requestVideo = async (item: ContentItem) => {
     const imageUrl = images[item.id]?.url;
@@ -1594,6 +1625,9 @@ export default function TeacherView({ user }: Props) {
     }
   };
 
+
+  const selectedLessonData =
+    lessons.find((lesson) => lesson.lesson_number === selectedLesson) ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -1665,6 +1699,15 @@ export default function TeacherView({ user }: Props) {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Step 1</p>
                 <h2 className="text-2xl font-semibold text-slate-900">Select lesson & publish quiz</h2>
               </div>
+
+              {selectedLessonData && (
+                <div className="rounded-2xl border border-[#BA0C2F]/15 bg-[#BA0C2F]/5 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#BA0C2F]">Learning objective</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">
+                    {selectedLessonData.learning_objective}
+                  </p>
+                </div>
+              )}
 
               {/* Lesson picker */}
               <div className="grid gap-3">

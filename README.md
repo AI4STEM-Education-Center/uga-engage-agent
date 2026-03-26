@@ -80,6 +80,7 @@ ENGAGE_AWS_REGION=us-east-2
 ENGAGE_AWS_ACCESS_KEY_ID=your_aws_access_key_id
 ENGAGE_AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
 ENGAGE_S3_BUCKET=genius-engage-agent-media
+COHORT_ANALYSIS_QUEUE_URL=
 
 # Optional — script tuning
 FEEDBACK_TICKET_CONCURRENCY=6
@@ -179,3 +180,36 @@ required for local development or the current app flows.
 If you also enable S3-backed media storage, create a bucket named
 `genius-engage-agent-media` (or your chosen `ENGAGE_S3_BUCKET`) in the same
 region as DynamoDB.
+
+## Async cohort analysis queue
+
+If you set `COHORT_ANALYSIS_QUEUE_URL`, uncached cohort analysis requests are
+queued through SQS instead of running inline on the app server.
+
+The app and worker expect:
+
+- An SQS queue whose URL is exposed to the app as `COHORT_ANALYSIS_QUEUE_URL`
+- A Lambda deployment built from `workers/cohort-analysis-worker`
+- DynamoDB access to the same table configured by `DYNAMODB_TABLE`
+- Lesson data bundled with the worker so queued runs use the same lesson-aware
+  prompts and cache versioning as the synchronous API path
+
+Package the worker with:
+
+```bash
+./scripts/deploy-cohort-analysis-worker.sh
+```
+
+The resulting zip includes the worker code, production dependencies, and the
+lesson JSON files from `data/`.
+
+Recommended worker configuration:
+
+- Environment variables: `OPENAI_API_KEY`, `DYNAMODB_TABLE`, and either
+  `ENGAGE_AWS_REGION` or the default Lambda `AWS_REGION`
+- Optional local/non-role credentials:
+  `ENGAGE_AWS_ACCESS_KEY_ID` and `ENGAGE_AWS_SECRET_ACCESS_KEY`
+- IAM permissions for DynamoDB reads/writes on the app table plus standard
+  CloudWatch Logs permissions
+- An SQS event source mapping from the queue to the worker Lambda
+- Queue visibility timeout longer than the worker runtime budget

@@ -5,30 +5,159 @@ import {
   PutCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import OpenAI, { APIConnectionTimeoutError } from "openai";
 
 const STRATEGY_REQUEST_TIMEOUT_MS = 45_000;
+const STRATEGY_PLAN_CACHE_VERSION = 2;
 
-const buildPrompt = (student) => ({
+const workerDir = path.dirname(fileURLToPath(import.meta.url));
+const lessonDataDir = path.join(workerDir, "data");
+
+const loadLessons = () => {
+  try {
+    return fs
+      .readdirSync(lessonDataDir)
+      .filter((fileName) => /^lesson\d+\.json$/i.test(fileName))
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+      .map((fileName) =>
+        JSON.parse(
+          fs.readFileSync(path.join(lessonDataDir, fileName), "utf8"),
+        ),
+      )
+      .filter(
+        (lesson) =>
+          lesson &&
+          typeof lesson === "object" &&
+          typeof lesson.lesson_number === "number",
+      );
+  } catch (error) {
+    console.warn(
+      "cohort-analysis-worker lesson data unavailable",
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
+};
+
+const lessons = loadLessons();
+
+const getLesson = (lessonNumber) =>
+  lessons.find((lesson) => lesson.lesson_number === lessonNumber) ?? null;
+
+const splitMisconceptionCodes = (value) =>
+  value
+    ?.split(",")
+    .map((part) => part.trim())
+    .filter(Boolean) ?? [];
+
+const resolveMisconceptionText = (lesson, misconceptionCode) => {
+  const codes = splitMisconceptionCodes(misconceptionCode);
+  if (codes.length === 0) {
+    return null;
+  }
+
+  return codes
+    .map((code) => lesson.misconceptions?.[code] ?? code)
+    .join("; ");
+};
+
+const getConfidenceText = (lesson, itemId, selectedOption) => {
+  if (!selectedOption) {
+    return null;
+  }
+
+  const confidenceItem = lesson.quiz_items?.find(
+    (item) => item.item_id === `${itemId}_confidence`,
+  );
+  if (!confidenceItem) {
+    return null;
+  }
+
+  return confidenceItem.options?.[selectedOption] ?? null;
+};
+
+const getLessonGenerationContext = (lessonNumber) => {
+  const lesson = getLesson(lessonNumber);
+  if (!lesson) {
+    return null;
+  }
+
+  return {
+    lessonNumber: lesson.lesson_number,
+    lessonTitle: lesson.lesson_title,
+    learningObjective: lesson.learning_objective,
+  };
+};
+
+const resolveQuizEvidence = (lessonNumber, answers) => {
+  const lesson = getLesson(lessonNumber);
+  if (!lesson) {
+    return [];
+  }
+
+  return (lesson.quiz_items ?? [])
+    .filter((item) => item.type === "multiple_choice")
+    .map((item) => {
+      const selectedOption = answers?.[item.item_id]?.trim().toUpperCase() ?? null;
+      const correctOption = item.correct_answer?.trim().toUpperCase() ?? null;
+      const confidenceOption =
+        answers?.[`${item.item_id}_confidence`]?.trim().toUpperCase() ?? null;
+      const isCorrect =
+        selectedOption && correctOption
+          ? selectedOption === correctOption
+          : null;
+      const misconceptionCode =
+        selectedOption && correctOption && selectedOption !== correctOption
+          ? item.distractor_misconception_map?.[selectedOption] ??
+            item.matched_misconception ??
+            null
+          : null;
+
+      return {
+        itemId: item.item_id,
+        questionNumber: item.question_number,
+        stem: item.stem,
+        selectedOption,
+        selectedText: selectedOption ? item.options?.[selectedOption] ?? null : null,
+        correctOption,
+        correctText: correctOption ? item.options?.[correctOption] ?? null : null,
+        isCorrect,
+        confidenceOption,
+        confidenceText: getConfidenceText(
+          lesson,
+          item.item_id,
+          confidenceOption,
+        ),
+        misconceptionCode,
+        misconceptionText: resolveMisconceptionText(lesson, misconceptionCode),
+      };
+    });
+};
+
+const buildPrompt = (student, lessonContext, quizEvidence) => ({
   system: `You are an education engagement planner.
 Return JSON only with keys: name, strategy, relevance, overallRecommendation, recommendationReason, summary, tldr, rationale, tactics, cadence, checks.
 The strategy must be exactly one of: cognitive conflict, analogy, experience bridging, engaged critiquing.
 The relevance field is an object with those four strategies as keys and integer scores from 0-100.
-Use the student's two-question quiz (concept understanding and past experience) to justify the recommendation.
+Base the recommendation primarily on the student's quiz evidence: question text, selected response, confidence, correctness, and any linked misconception.
+Use the lesson learning objective as supplemental context, not as a substitute for the student's quiz evidence.
 Make the recommendationReason reference the student by name and the assignment/topic.
-For recommendationReason and rationale, cite 2+ concrete details from the student's answers and connect them directly to the chosen strategy.`,
+For recommendationReason and rationale, cite 2+ concrete details from the student's quiz evidence and connect them directly to the chosen strategy.`,
   user: `Student name: ${student.name}
-Assignment: ${student.assignment ?? "Not provided"}
+Assignment: ${lessonContext?.lessonTitle ?? student.assignment ?? "Not provided"}
 
-Questionnaire answers:
-${JSON.stringify(student.answers ?? {}, null, 2)}
+${lessonContext ? `Lesson objective:\n${lessonContext.learningObjective}\n\n` : ""}Structured quiz evidence:
+${quizEvidence.length > 0 ? JSON.stringify(quizEvidence, null, 2) : JSON.stringify(student.answers ?? {}, null, 2)}
 
 Return a plan:
 - name: short label
 - strategy: one of [cognitive conflict, analogy, experience bridging, engaged critiquing]
 - relevance: scores 0-100 for each strategy
 - overallRecommendation: 1-2 sentences, teacher-facing
-- recommendationReason: 2-3 sentences explaining why this strategy fits ${student.name}; reference the assignment/topic and cite 2+ specific answer details
+- recommendationReason: 2-3 sentences explaining why this strategy fits ${student.name}; reference the assignment/topic and cite 2+ specific quiz-evidence details
 - summary: 1 sentence
 - tldr: 8-14 words, teacher-facing
 - rationale: 3-5 sentences; reference the assignment/topic and include at least one concrete in-class example of how the teacher would use the strategy with ${student.name}
@@ -80,6 +209,42 @@ const parseJson = (value) => {
   return JSON.parse(value);
 };
 
+const isRecord = (value) => typeof value === "object" && value !== null;
+
+const serializeCachedPlan = (plan, lessonNumber) =>
+  JSON.stringify({
+    promptVersion: STRATEGY_PLAN_CACHE_VERSION,
+    lessonNumber: typeof lessonNumber === "number" ? lessonNumber : null,
+    plan,
+  });
+
+const deserializeCachedPlan = (planJson, options = {}) => {
+  const parsed = JSON.parse(planJson);
+
+  if (isRecord(parsed) && "promptVersion" in parsed && "plan" in parsed) {
+    const promptVersion =
+      typeof parsed.promptVersion === "number" ? parsed.promptVersion : null;
+    if (promptVersion !== STRATEGY_PLAN_CACHE_VERSION) {
+      return null;
+    }
+
+    if (
+      typeof options.lessonNumber === "number" &&
+      parsed.lessonNumber !== options.lessonNumber
+    ) {
+      return null;
+    }
+
+    return parsed.plan;
+  }
+
+  if (options.requireVersionMatch) {
+    return null;
+  }
+
+  return parsed;
+};
+
 const isTimeoutError = (error) =>
   error instanceof APIConnectionTimeoutError ||
   (error instanceof Error &&
@@ -99,11 +264,32 @@ const requireEnv = (name) => {
 };
 
 const tableName = requireEnv("DYNAMODB_TABLE");
-const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-2";
+const region =
+  process.env.ENGAGE_AWS_REGION ??
+  process.env.AWS_REGION ??
+  process.env.AWS_DEFAULT_REGION ??
+  "us-east-2";
+const awsAccessKeyId =
+  process.env.ENGAGE_AWS_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID;
+const awsSecretAccessKey =
+  process.env.ENGAGE_AWS_SECRET_ACCESS_KEY ??
+  process.env.AWS_SECRET_ACCESS_KEY;
 
-const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
-  marshallOptions: { removeUndefinedValues: true },
-});
+const dynamo = DynamoDBDocumentClient.from(
+  new DynamoDBClient({
+    region,
+    ...(awsAccessKeyId &&
+      awsSecretAccessKey && {
+        credentials: {
+          accessKeyId: awsAccessKeyId,
+          secretAccessKey: awsSecretAccessKey,
+        },
+      }),
+  }),
+  {
+    marshallOptions: { removeUndefinedValues: true },
+  },
+);
 
 const openai = new OpenAI({
   apiKey: requireEnv("OPENAI_API_KEY"),
@@ -262,12 +448,28 @@ const putStudentResult = async ({
   );
 };
 
+const normalizeLessonNumber = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 const validateMessage = (payload) => {
   if (!payload || typeof payload !== "object") {
     throw new Error("Message body must be an object.");
   }
 
-  const { jobId, classId, assignmentId, student, totalStudents } = payload;
+  const {
+    jobId,
+    classId,
+    assignmentId,
+    lessonNumber,
+    student,
+    totalStudents,
+  } = payload;
   if (!jobId || !classId || !assignmentId) {
     throw new Error("jobId, classId, and assignmentId are required.");
   }
@@ -284,6 +486,7 @@ const validateMessage = (payload) => {
     jobId,
     classId,
     assignmentId,
+    lessonNumber: normalizeLessonNumber(lessonNumber),
     totalStudents: Number(totalStudents ?? 1),
     student,
   };
@@ -292,12 +495,21 @@ const validateMessage = (payload) => {
 const processRecord = async (record) => {
   const startedAt = performance.now();
   const payload = validateMessage(JSON.parse(record.body ?? "{}"));
-  const { jobId, classId, assignmentId, totalStudents, student } = payload;
+  const { jobId, classId, assignmentId, lessonNumber, totalStudents, student } =
+    payload;
 
   let source = "model";
   let cacheReadMs = 0;
   let modelMs = 0;
   let cacheWriteMs = 0;
+  const lessonContext =
+    typeof lessonNumber === "number"
+      ? getLessonGenerationContext(lessonNumber)
+      : null;
+
+  if (typeof lessonNumber === "number" && !lessonContext) {
+    throw new Error(`Lesson ${lessonNumber} not found.`);
+  }
 
   try {
     const cacheReadStartedAt = performance.now();
@@ -310,12 +522,25 @@ const processRecord = async (record) => {
 
     let plan;
     if (cachedPlanJson) {
-      source = "cache";
-      const parsed = JSON.parse(cachedPlanJson);
-      parsed.strategy = normalizeStrategy(parsed.strategy);
-      plan = ensurePlanFields(parsed);
-    } else {
-      const prompt = buildPrompt(student);
+      const parsed = deserializeCachedPlan(cachedPlanJson, {
+        lessonNumber: lessonContext?.lessonNumber,
+        requireVersionMatch: lessonContext !== null,
+      });
+      if (parsed) {
+        source = "cache";
+        parsed.strategy = normalizeStrategy(parsed.strategy);
+        plan = ensurePlanFields(parsed);
+      }
+    }
+
+    if (!plan) {
+      const prompt = buildPrompt(
+        student,
+        lessonContext,
+        typeof lessonNumber === "number"
+          ? resolveQuizEvidence(lessonNumber, student.answers)
+          : [],
+      );
       const completion = await (async () => {
         const modelStartedAt = performance.now();
         try {
@@ -342,7 +567,7 @@ const processRecord = async (record) => {
           classId,
           assignmentId,
           student.id,
-          JSON.stringify(plan),
+          serializeCachedPlan(plan, lessonContext?.lessonNumber),
         );
       } finally {
         cacheWriteMs = elapsedMs(cacheWriteStartedAt);
@@ -383,6 +608,7 @@ const processRecord = async (record) => {
         jobId,
         classId,
         assignmentId,
+        lessonNumber,
         studentId: student.id,
         source,
         timing,
@@ -429,6 +655,7 @@ const processRecord = async (record) => {
         jobId: payload.jobId,
         classId: payload.classId,
         assignmentId: payload.assignmentId,
+        lessonNumber: payload.lessonNumber,
         studentId: payload.student.id,
         error: message,
         timing,
@@ -440,11 +667,27 @@ const processRecord = async (record) => {
 };
 
 export const handler = async (event) => {
+  const batchItemFailures = [];
+
   for (const record of event.Records ?? []) {
-    await processRecord(record);
+    try {
+      await processRecord(record);
+    } catch (error) {
+      console.error(
+        "cohort-analysis-worker record failure",
+        JSON.stringify({
+          messageId: record.messageId ?? null,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+
+      if (record.messageId) {
+        batchItemFailures.push({ itemIdentifier: record.messageId });
+      }
+    }
   }
 
   return {
-    batchItemFailures: [],
+    batchItemFailures,
   };
 };

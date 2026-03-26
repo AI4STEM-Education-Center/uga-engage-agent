@@ -29,18 +29,30 @@ export async function POST(request: Request) {
       );
     }
 
-    const { classId, assignmentId, students = [] } = (await request.json()) as {
+    const {
+      classId,
+      assignmentId,
+      lessonNumber,
+      students = [],
+    } = (await request.json()) as {
       classId?: string;
       assignmentId?: string;
+      lessonNumber?: number;
       students?: Student[];
     };
 
     const classKey = classId?.trim();
     const assignmentKey = assignmentId?.trim();
+    const normalizedLessonNumber =
+      typeof lessonNumber === "number" &&
+      Number.isInteger(lessonNumber) &&
+      lessonNumber > 0
+        ? lessonNumber
+        : null;
 
-    if (!classKey || !assignmentKey) {
+    if (!classKey || !assignmentKey || normalizedLessonNumber === null) {
       return NextResponse.json(
-        { error: "classId and assignmentId are required." },
+        { error: "classId, assignmentId, and lessonNumber are required." },
         { status: 400 },
       );
     }
@@ -68,6 +80,7 @@ export async function POST(request: Request) {
         jobId,
         classId: classKey,
         assignmentId: assignmentKey,
+        lessonNumber: normalizedLessonNumber,
         totalStudents: normalizedStudents.length,
         students: normalizedStudents,
       });

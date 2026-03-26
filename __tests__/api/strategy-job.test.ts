@@ -58,6 +58,7 @@ describe("POST /api/strategy-job", () => {
         body: JSON.stringify({
           classId: "class-1",
           assignmentId: "assignment-1",
+          lessonNumber: 2,
           students: [
             { id: "student-1", name: "Ava", assignment: "Lesson 1", answers: { q1: "A" } },
             { id: "student-2", name: "Jon", assignment: "Lesson 1", answers: { q1: "B" } },
@@ -84,6 +85,7 @@ describe("POST /api/strategy-job", () => {
       jobId: "job-123",
       classId: "class-1",
       assignmentId: "assignment-1",
+      lessonNumber: 2,
       totalStudents: 2,
       students: [
         { id: "student-1", name: "Ava", assignment: "Lesson 1", answers: { q1: "A" } },
@@ -102,6 +104,7 @@ describe("POST /api/strategy-job", () => {
         body: JSON.stringify({
           classId: "class-1",
           assignmentId: "assignment-1",
+          lessonNumber: 2,
           students: [{ id: "student-1", name: "Ava", answers: { q1: "A" } }],
         }),
       }),
@@ -111,6 +114,28 @@ describe("POST /api/strategy-job", () => {
     const data = await res.json();
     expect(data.error).toBe(
       "Cohort analysis queue is not configured on this environment.",
+    );
+  });
+
+  it("returns 400 when lessonNumber is missing", async () => {
+    isCohortAnalysisQueueConfigured.mockReturnValue(true);
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/strategy-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: "class-1",
+          assignmentId: "assignment-1",
+          students: [{ id: "student-1", name: "Ava", answers: { q1: "A" } }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe(
+      "classId, assignmentId, and lessonNumber are required.",
     );
   });
 });

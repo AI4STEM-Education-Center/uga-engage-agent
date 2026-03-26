@@ -77,7 +77,7 @@ export default function StudentQuizView({ user }: Props) {
 
       // Check for existing answers
       const answerRes = await fetch(
-        `/api/student-answers?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${encodeURIComponent(user.userId)}`,
+        `/api/student-answers?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${encodeURIComponent(user.userId)}&lessonNumber=${encodeURIComponent(qs.lesson_number)}`,
       );
       const answerData = await answerRes.json();
       if (answerData.answer) {
