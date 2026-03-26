@@ -91,9 +91,45 @@ describe("POST /api/strategy-job", () => {
       assignmentId: "assignment-1",
       lessonNumber: 2,
       totalStudents: 2,
+      forceRefresh: false,
       students: [
         { id: "student-1", name: "Ava", assignment: "Lesson 1", answers: { q1: "A" } },
         { id: "student-2", name: "Jon", assignment: "Lesson 1", answers: { q1: "B" } },
+      ],
+    });
+  });
+
+  it("passes forceRefresh through to the queue payload", async () => {
+    isCohortAnalysisQueueConfigured.mockReturnValue(true);
+    createCohortJob.mockResolvedValue(undefined);
+    enqueueCohortJobStudents.mockResolvedValue(undefined);
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/strategy-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: "class-1",
+          assignmentId: "assignment-1",
+          lessonNumber: 2,
+          forceRefresh: true,
+          students: [
+            { id: "student-1", name: "Ava", assignment: "Lesson 1", answers: { q1: "A" } },
+          ],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(enqueueCohortJobStudents).toHaveBeenCalledWith({
+      jobId: "job-123",
+      classId: "class-1",
+      assignmentId: "assignment-1",
+      lessonNumber: 2,
+      totalStudents: 1,
+      forceRefresh: true,
+      students: [
+        { id: "student-1", name: "Ava", assignment: "Lesson 1", answers: { q1: "A" } },
       ],
     });
   });

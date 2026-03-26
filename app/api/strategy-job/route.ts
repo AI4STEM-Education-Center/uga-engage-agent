@@ -36,11 +36,13 @@ export async function POST(request: Request) {
       classId,
       assignmentId,
       lessonNumber,
+      forceRefresh,
       students = [],
     } = (await request.json()) as {
       classId?: string;
       assignmentId?: string;
       lessonNumber?: number;
+      forceRefresh?: boolean;
       students?: Student[];
     };
 
@@ -63,6 +65,7 @@ export async function POST(request: Request) {
     const normalizedStudents = (students ?? []).filter(
       (student) => student?.id && student?.name,
     );
+    const shouldForceRefresh = forceRefresh === true;
     if (normalizedStudents.length === 0) {
       return NextResponse.json(
         { error: "At least one student is required." },
@@ -85,6 +88,7 @@ export async function POST(request: Request) {
         assignmentId: assignmentKey,
         lessonNumber: normalizedLessonNumber,
         totalStudents: normalizedStudents.length,
+        forceRefresh: shouldForceRefresh,
         students: normalizedStudents,
       });
     } catch (error) {

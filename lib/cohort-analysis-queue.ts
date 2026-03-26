@@ -61,6 +61,7 @@ export const enqueueCohortJobStudents = async ({
   assignmentId,
   lessonNumber,
   totalStudents,
+  forceRefresh = false,
   students,
 }: {
   jobId: string;
@@ -68,6 +69,7 @@ export const enqueueCohortJobStudents = async ({
   assignmentId: string;
   lessonNumber: number;
   totalStudents: number;
+  forceRefresh?: boolean;
   students: Array<{
     id: string;
     name: string;
@@ -99,6 +101,7 @@ export const enqueueCohortJobStudents = async ({
             assignmentId,
             lessonNumber,
             totalStudents,
+            forceRefresh,
             student,
           }),
         })),

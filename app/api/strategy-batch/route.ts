@@ -158,6 +158,7 @@ const generatePlanForStudent = async ({
   model,
   classKey,
   assignmentKey,
+  forceRefresh,
   student,
   lessonContext,
   quizEvidence,
@@ -166,24 +167,27 @@ const generatePlanForStudent = async ({
   model: string;
   classKey: string;
   assignmentKey: string;
+  forceRefresh: boolean;
   student: Student;
   lessonContext: LessonGenerationContext | null;
   quizEvidence: ResolvedQuizEvidence[];
 }): Promise<StudentStrategyResult> => {
-  const cachedPlanJson = await getCachedPlanJson(
-    classKey,
-    assignmentKey,
-    student.id,
-  );
-  if (cachedPlanJson) {
-    const cachedPlan = deserializeCachedPlan<Plan>(cachedPlanJson, {
-      lessonNumber: lessonContext?.lessonNumber,
-      requireVersionMatch: lessonContext !== null,
-    });
-    if (cachedPlan) {
-      cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
-      const plan = ensurePlanFields(cachedPlan);
-      return { id: student.id, name: student.name, plan };
+  if (!forceRefresh) {
+    const cachedPlanJson = await getCachedPlanJson(
+      classKey,
+      assignmentKey,
+      student.id,
+    );
+    if (cachedPlanJson) {
+      const cachedPlan = deserializeCachedPlan<Plan>(cachedPlanJson, {
+        lessonNumber: lessonContext?.lessonNumber,
+        requireVersionMatch: lessonContext !== null,
+      });
+      if (cachedPlan) {
+        cachedPlan.strategy = normalizeStrategy(cachedPlan.strategy);
+        const plan = ensurePlanFields(cachedPlan);
+        return { id: student.id, name: student.name, plan };
+      }
     }
   }
 
@@ -231,11 +235,13 @@ export async function POST(request: Request) {
       classId,
       assignmentId,
       lessonNumber,
+      forceRefresh,
     } = (await request.json()) as {
       students?: Student[];
       classId?: string;
       assignmentId?: string;
       lessonNumber?: number;
+      forceRefresh?: boolean;
     };
     const classKey = classId?.trim();
     const assignmentKey = assignmentId?.trim();
@@ -258,6 +264,7 @@ export async function POST(request: Request) {
     }
 
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
+    const shouldForceRefresh = forceRefresh === true;
     const results: StudentStrategyResult[] = [];
     const errors: StudentStrategyError[] = [];
 
@@ -270,6 +277,7 @@ export async function POST(request: Request) {
             model,
             classKey,
             assignmentKey,
+            forceRefresh: shouldForceRefresh,
             student,
             lessonContext,
             quizEvidence:

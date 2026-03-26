@@ -467,6 +467,7 @@ const validateMessage = (payload) => {
     classId,
     assignmentId,
     lessonNumber,
+    forceRefresh,
     student,
     totalStudents,
   } = payload;
@@ -487,6 +488,7 @@ const validateMessage = (payload) => {
     classId,
     assignmentId,
     lessonNumber: normalizeLessonNumber(lessonNumber),
+    forceRefresh: forceRefresh === true,
     totalStudents: Number(totalStudents ?? 1),
     student,
   };
@@ -495,7 +497,15 @@ const validateMessage = (payload) => {
 const processRecord = async (record) => {
   const startedAt = performance.now();
   const payload = validateMessage(JSON.parse(record.body ?? "{}"));
-  const { jobId, classId, assignmentId, lessonNumber, totalStudents, student } =
+  const {
+    jobId,
+    classId,
+    assignmentId,
+    lessonNumber,
+    forceRefresh,
+    totalStudents,
+    student,
+  } =
     payload;
 
   let source = "model";
@@ -515,7 +525,13 @@ const processRecord = async (record) => {
     const cacheReadStartedAt = performance.now();
     let cachedPlanJson = null;
     try {
-      cachedPlanJson = await getCachedPlanJson(classId, assignmentId, student.id);
+      if (!forceRefresh) {
+        cachedPlanJson = await getCachedPlanJson(
+          classId,
+          assignmentId,
+          student.id,
+        );
+      }
     } finally {
       cacheReadMs = elapsedMs(cacheReadStartedAt);
     }
@@ -609,6 +625,7 @@ const processRecord = async (record) => {
         classId,
         assignmentId,
         lessonNumber,
+        forceRefresh,
         studentId: student.id,
         source,
         timing,
@@ -656,6 +673,7 @@ const processRecord = async (record) => {
         classId: payload.classId,
         assignmentId: payload.assignmentId,
         lessonNumber: payload.lessonNumber,
+        forceRefresh: payload.forceRefresh,
         studentId: payload.student.id,
         error: message,
         timing,

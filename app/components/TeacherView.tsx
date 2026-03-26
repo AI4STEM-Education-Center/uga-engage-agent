@@ -77,6 +77,10 @@ type StrategyJobStatusResponse = {
 
 type StrategyJobStatus = NonNullable<StrategyJobStatusResponse["job"]>["status"];
 
+type CohortAnalysisRequestOptions = {
+  forceRefresh?: boolean;
+};
+
 const COHORT_ANALYSIS_CHUNK_SIZE = 4;
 const COHORT_ANALYSIS_MAX_ATTEMPTS = 2;
 const COHORT_ANALYSIS_JOB_POLL_MS = 1500;
@@ -1093,11 +1097,13 @@ export default function TeacherView({ user }: Props) {
   }, [loadingCohort]);
 
   const runSynchronousCohortAnalysis = async ({
+    forceRefresh,
     lessonNumber,
     studentsForApi,
     uncachedStudents,
     resultsMap,
   }: {
+    forceRefresh: boolean;
     lessonNumber: number;
     studentsForApi: Array<{
       id: string;
@@ -1113,6 +1119,8 @@ export default function TeacherView({ user }: Props) {
     }>;
     resultsMap: Map<string, StudentStrategyResult>;
   }) => {
+    const actionLabel = forceRefresh ? "Reanalyzing" : "Analyzing";
+    const studentScopeLabel = forceRefresh ? "students" : "uncached students";
     const studentChunks = chunkItems(
       uncachedStudents,
       COHORT_ANALYSIS_CHUNK_SIZE,
@@ -1133,7 +1141,7 @@ export default function TeacherView({ user }: Props) {
           total: studentsForApi.length,
           currentName:
             attempt === 1
-              ? `Analyzing batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${uncachedStudents.length} uncached students)...`
+              ? `${actionLabel} batch ${chunkIndex + 1} of ${studentChunks.length} (${batchStart}-${batchEnd} of ${uncachedStudents.length} ${studentScopeLabel})...`
               : `Retrying ${pendingStudents.length} student${pendingStudents.length === 1 ? "" : "s"} in batch ${chunkIndex + 1} of ${studentChunks.length}...`,
         });
 
@@ -1145,6 +1153,7 @@ export default function TeacherView({ user }: Props) {
             classId,
             assignmentId,
             lessonNumber,
+            forceRefresh,
           }),
         });
         const data = await parseJsonResponse<StrategyBatchResponse>(res);
@@ -1204,7 +1213,9 @@ export default function TeacherView({ user }: Props) {
     }
   };
 
-  const requestCohortAnalysis = async () => {
+  const requestCohortAnalysis = async ({
+    forceRefresh = false,
+  }: CohortAnalysisRequestOptions = {}) => {
     if (!classId || !assignmentId) return;
     if (!selectedLesson) {
       setError("Select a lesson before generating strategies.");
@@ -1226,7 +1237,13 @@ export default function TeacherView({ user }: Props) {
     setSelectedForPublish(new Set());
     setCohortResults([]);
     setCohortDistribution({});
-    setCohortProgress({ processed: 0, total: studentAnswers.length, currentName: "Loading cache..." });
+    setCohortProgress({
+      processed: 0,
+      total: studentAnswers.length,
+      currentName: forceRefresh
+        ? "Starting cohort reanalysis..."
+        : "Loading cache...",
+    });
 
     try {
       let cohortWarning: string | null = null;
@@ -1238,10 +1255,12 @@ export default function TeacherView({ user }: Props) {
       }));
 
       const cacheUrl = `/api/strategy-cache?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&lessonNumber=${encodeURIComponent(lessonNumber)}`;
-      const cacheRes = await fetch(cacheUrl);
       let cacheData: { results?: Array<{ studentId?: string; plan?: unknown }> } = { results: [] };
-      if (cacheRes.ok) {
-        cacheData = await cacheRes.json();
+      if (!forceRefresh) {
+        const cacheRes = await fetch(cacheUrl);
+        if (cacheRes.ok) {
+          cacheData = await cacheRes.json();
+        }
       }
 
       const cachedMap = new Map<string, Plan>();
@@ -1268,12 +1287,16 @@ export default function TeacherView({ user }: Props) {
         currentName:
           initialResults.length > 0
             ? `Loaded ${initialResults.length} cached student${initialResults.length === 1 ? "" : "s"}.`
-            : "Starting cohort analysis...",
+            : forceRefresh
+              ? "Starting cohort reanalysis..."
+              : "Starting cohort analysis...",
       });
 
-      const uncachedStudents = studentsForApi.filter(
-        (student) => !cachedMap.has(student.id),
-      );
+      const uncachedStudents = forceRefresh
+        ? studentsForApi
+        : studentsForApi.filter(
+            (student) => !cachedMap.has(student.id),
+          );
       if (uncachedStudents.length > 0) {
         const startRes = await fetch("/api/strategy-job", {
           method: "POST",
@@ -1283,6 +1306,7 @@ export default function TeacherView({ user }: Props) {
             classId,
             assignmentId,
             lessonNumber,
+            forceRefresh,
           }),
         });
         const startData = await parseJsonResponse<StrategyJobStartResponse>(startRes);
@@ -1292,14 +1316,17 @@ export default function TeacherView({ user }: Props) {
             .filter((name) => typeof name === "string" && name.length > 0);
           cohortWarning =
             missingEnv.length > 0
-              ? `Cohort analysis queue is not configured on this environment (${missingEnv.join(", ")}). Running inline analysis instead.`
-              : `${startData?.error ?? "Cohort analysis queue is not configured on this environment."} Running inline analysis instead.`;
+              ? `Cohort analysis queue is not configured on this environment (${missingEnv.join(", ")}). Running inline ${forceRefresh ? "reanalysis" : "analysis"} instead.`
+              : `${startData?.error ?? "Cohort analysis queue is not configured on this environment."} Running inline ${forceRefresh ? "reanalysis" : "analysis"} instead.`;
           setCohortProgress({
             processed: initialResults.length,
             total: studentsForApi.length,
-            currentName: "Queue not configured here; analyzing inline instead...",
+            currentName: forceRefresh
+              ? "Queue not configured here; reanalyzing inline instead..."
+              : "Queue not configured here; analyzing inline instead...",
           });
           await runSynchronousCohortAnalysis({
+            forceRefresh,
             lessonNumber,
             studentsForApi,
             uncachedStudents,
@@ -1349,8 +1376,12 @@ export default function TeacherView({ user }: Props) {
               currentName: terminal
                 ? "Finalizing cohort recommendation..."
                 : statusData.job.status === "queued"
-                  ? `Queued ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"} for analysis...`
-                  : `Analyzing ${processedStudents} of ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"}...`,
+                  ? forceRefresh
+                    ? `Queued ${queuedStudents} student${queuedStudents === 1 ? "" : "s"} for reanalysis...`
+                    : `Queued ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"} for analysis...`
+                  : forceRefresh
+                    ? `Reanalyzing ${processedStudents} of ${queuedStudents} student${queuedStudents === 1 ? "" : "s"}...`
+                    : `Analyzing ${processedStudents} of ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"}...`,
             });
 
             if (terminal) {
@@ -1836,12 +1867,26 @@ export default function TeacherView({ user }: Props) {
                         ?
                       </button>
                     </div>
-                    <p className="mt-1 text-sm text-slate-600">Generate strategies for all students who have answered.</p>
+                    <p className="mt-1 text-sm text-slate-600">Generate strategies for all students who have answered. Use reanalysis when you want to ignore cached recommendations and rerun every student.</p>
                   </div>
-                  <button type="button" onClick={requestCohortAnalysis} disabled={loadingCohort || studentAnswers.length === 0}
-                    className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400">
-                    {loadingCohort ? "Analyzing cohort..." : `Analyze ${studentAnswers.length} students`}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void requestCohortAnalysis()}
+                      disabled={loadingCohort || studentAnswers.length === 0}
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+                    >
+                      {loadingCohort ? "Running..." : `Analyze ${studentAnswers.length} students`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void requestCohortAnalysis({ forceRefresh: true })}
+                      disabled={loadingCohort || studentAnswers.length === 0}
+                      className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      {loadingCohort ? "Running..." : "Reanalyze All"}
+                    </button>
+                  </div>
                 </div>
 
                 {showCohortHelp && (
