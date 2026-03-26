@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { UserContext } from "@/lib/auth";
+import {
+  buildContentMediaDebugHeaders,
+  createContentMediaDebugRequestId,
+  extractContentJsonMediaSummary,
+  isContentMediaDebugEnabledInBrowser,
+  logContentMediaDebug,
+  summarizeMediaUrl,
+} from "@/lib/content-media-debug";
 import type { ContentItem, TextMode } from "@/lib/types";
 import {
   buildPublishedContentState,
@@ -55,12 +63,36 @@ export default function StudentContentRatingView({ user }: Props) {
     }
 
     try {
+      const debugEnabled = isContentMediaDebugEnabledInBrowser();
+      const debugRequestId = debugEnabled
+        ? createContentMediaDebugRequestId("student-content-load")
+        : undefined;
+      const debugHeaders = buildContentMediaDebugHeaders(
+        debugEnabled,
+        debugRequestId,
+      );
+
+      if (debugEnabled) {
+        logContentMediaDebug(
+          "student.load.begin",
+          {
+            classId,
+            assignmentId,
+            studentId: user.userId,
+            silent,
+          },
+          { enabled: true, requestId: debugRequestId },
+        );
+      }
+
       const [pubRes, mediaRes] = await Promise.all([
         fetch(
           `/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`,
+          { headers: debugHeaders },
         ),
         fetch(
           `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`,
+          { headers: debugHeaders },
         ),
       ]);
 
@@ -77,6 +109,56 @@ export default function StudentContentRatingView({ user }: Props) {
         mediaData.results ?? [],
       );
 
+      if (debugEnabled) {
+        logContentMediaDebug(
+          "student.load.result",
+          {
+            responses: {
+              contentPublish: { ok: pubRes.ok, status: pubRes.status },
+              media: { ok: mediaRes.ok, status: mediaRes.status },
+            },
+            publishedItems: (pubData.items ?? []).map((item) => ({
+              contentItemId: item.content_item_id,
+              routeMedia: item.media ?? null,
+              routeMediaSummary: item.media
+                ? {
+                    ...(item.media.image
+                      ? { image: summarizeMediaUrl(item.media.image) }
+                      : {}),
+                    ...(item.media.video
+                      ? { video: summarizeMediaUrl(item.media.video) }
+                      : {}),
+                  }
+                : null,
+              contentJsonMediaSummary: extractContentJsonMediaSummary(
+                item.content_json,
+              ),
+            })),
+            directMediaRecords: (mediaData.results ?? []).map((record) => ({
+              contentItemId: record.content_item_id ?? null,
+              mediaType: record.media_type ?? null,
+              urlSummary: summarizeMediaUrl(record.data_url),
+            })),
+            mergedMediaByItemId: Object.fromEntries(
+              Object.entries(publishedState.mediaByItemId).map(
+                ([itemId, itemMedia]) => [
+                  itemId,
+                  {
+                    ...(itemMedia.image
+                      ? { image: summarizeMediaUrl(itemMedia.image) }
+                      : {}),
+                    ...(itemMedia.video
+                      ? { video: summarizeMediaUrl(itemMedia.video) }
+                      : {}),
+                  },
+                ],
+              ),
+            ),
+          },
+          { enabled: true, requestId: debugRequestId },
+        );
+      }
+
       setContentItems(publishedState.contentItems);
       setMedia(publishedState.mediaByItemId);
       setError(null);
@@ -87,7 +169,7 @@ export default function StudentContentRatingView({ user }: Props) {
         setLoading(false);
       }
     }
-  }, [assignmentId, classId]);
+  }, [assignmentId, classId, user.userId]);
 
   const loadRatings = useCallback(async () => {
     if (!classId || !assignmentId) {

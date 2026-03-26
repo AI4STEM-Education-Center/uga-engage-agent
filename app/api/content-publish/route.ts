@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import {
+  extractContentJsonMediaSummary,
+  getContentMediaDebugContext,
+  logContentMediaDebug,
+  summarizeSharedMedia,
+} from "@/lib/content-media-debug";
 import { upsertContentPublish, listMedia, listPublishedContent } from "@/lib/nosql";
 
 type SharedContentMedia = {
@@ -25,7 +31,8 @@ const sanitizePublishedItem = (item: Record<string, unknown>) => {
       : {}),
   };
 
-  const { media: _media, ...rest } = item;
+  const rest = { ...item };
+  delete rest.media;
   return {
     ...rest,
     ...(Object.keys(sanitizedMedia).length > 0 ? { media: sanitizedMedia } : {}),
@@ -56,6 +63,7 @@ const extractEmbeddedMedia = (contentJson: string): SharedContentMedia | undefin
 };
 
 export async function GET(request: Request) {
+  const debug = getContentMediaDebugContext(request);
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get("classId");
   const assignmentId = searchParams.get("assignmentId");
@@ -92,6 +100,28 @@ export async function GET(request: Request) {
     return accumulator;
   }, {});
 
+  if (debug.enabled) {
+    logContentMediaDebug(
+      "api.content-publish.get",
+      {
+        classId,
+        assignmentId,
+        itemCount: items.length,
+        mediaRecordCount: mediaRecords.length,
+        items: items.map((item) => ({
+          contentItemId: item.content_item_id,
+          contentJsonMediaSummary: extractContentJsonMediaSummary(
+            item.content_json,
+          ),
+          directMediaSummary: summarizeSharedMedia(
+            mediaByItem[item.content_item_id],
+          ),
+        })),
+      },
+      debug,
+    );
+  }
+
   return NextResponse.json({
     items: items.map((item) => {
       const embeddedMedia = extractEmbeddedMedia(item.content_json);
@@ -109,6 +139,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const debug = getContentMediaDebugContext(request);
   const body = await request.json();
   const { classId, assignmentId, contentItems, publishedBy } = body;
 
@@ -125,6 +156,23 @@ export async function POST(request: Request) {
   for (const item of contentItems) {
     if (!item || typeof item !== "object" || !("id" in item) || !item.id) continue;
     const sanitizedItem = sanitizePublishedItem(item as Record<string, unknown>);
+    if (debug.enabled) {
+      logContentMediaDebug(
+        "api.content-publish.post.item",
+        {
+          classId,
+          assignmentId,
+          contentItemId: String(item.id),
+          incomingMediaSummary: summarizeSharedMedia(
+            (item as { media?: unknown }).media,
+          ),
+          sanitizedMediaSummary: summarizeSharedMedia(
+            (sanitizedItem as { media?: unknown }).media,
+          ),
+        },
+        debug,
+      );
+    }
     const record = await upsertContentPublish({
       class_id: classId,
       assignment_id: assignmentId,
@@ -135,6 +183,19 @@ export async function POST(request: Request) {
       published_by: publishedBy ?? "unknown",
     });
     results.push(record);
+  }
+
+  if (debug.enabled) {
+    logContentMediaDebug(
+      "api.content-publish.post.result",
+      {
+        classId,
+        assignmentId,
+        publishedBy: publishedBy ?? "unknown",
+        publishedCount: results.length,
+      },
+      debug,
+    );
   }
 
   return NextResponse.json({ published: results }, { status: 201 });

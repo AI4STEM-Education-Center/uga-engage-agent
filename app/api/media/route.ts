@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getContentMediaDebugContext,
+  logContentMediaDebug,
+  summarizeMediaUrl,
+} from "@/lib/content-media-debug";
 import { getMedia, listMedia } from "@/lib/nosql";
 
 /**
@@ -17,6 +22,7 @@ import { getMedia, listMedia } from "@/lib/nosql";
  * Otherwise returns a list of matching media records.
  */
 export async function GET(request: NextRequest) {
+  const debug = getContentMediaDebugContext(request);
   const params = request.nextUrl.searchParams;
   const classId = params.get("classId");
   const assignmentId = params.get("assignmentId");
@@ -45,7 +51,28 @@ export async function GET(request: NextRequest) {
         mediaType,
       );
       if (!record) {
+        if (debug.enabled) {
+          logContentMediaDebug(
+            "api.media.get.single.miss",
+            { classId, assignmentId, studentId, contentItemId, mediaType },
+            debug,
+          );
+        }
         return NextResponse.json({ found: false }, { status: 404 });
+      }
+      if (debug.enabled) {
+        logContentMediaDebug(
+          "api.media.get.single.hit",
+          {
+            classId,
+            assignmentId,
+            studentId,
+            contentItemId,
+            mediaType,
+            urlSummary: summarizeMediaUrl(record.data_url),
+          },
+          debug,
+        );
       }
       return NextResponse.json({ found: true, media: record });
     }
@@ -58,6 +85,25 @@ export async function GET(request: NextRequest) {
       contentItemId ?? undefined,
       mediaType ?? undefined,
     );
+    if (debug.enabled) {
+      logContentMediaDebug(
+        "api.media.get.list",
+        {
+          classId,
+          assignmentId,
+          studentId,
+          contentItemId,
+          mediaType,
+          resultCount: records.length,
+          records: records.map((record) => ({
+            contentItemId: record.content_item_id,
+            mediaType: record.media_type,
+            urlSummary: summarizeMediaUrl(record.data_url),
+          })),
+        },
+        debug,
+      );
+    }
     return NextResponse.json({ results: records });
   } catch (error) {
     const message =
