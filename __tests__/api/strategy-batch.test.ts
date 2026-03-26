@@ -56,6 +56,7 @@ const buildRequest = (students: Array<Record<string, unknown>>) =>
     body: JSON.stringify({
       classId: "class-1",
       assignmentId: "assignment-1",
+      lessonNumber: 1,
       students,
     }),
   });
@@ -100,8 +101,8 @@ describe("POST /api/strategy-batch", () => {
       .mockRejectedValueOnce(new MockAPIConnectionTimeoutError());
 
     const res = await POST(buildRequest([
-      { id: "student-1", name: "Jon", answers: { q1: "A", q2: "B" } },
-      { id: "student-2", name: "David", answers: { q1: "C", q2: "D" } },
+      { id: "student-1", name: "Jon", answers: { L1_Q1: "A", L1_Q1_confidence: "B" } },
+      { id: "student-2", name: "David", answers: { L1_Q1: "C", L1_Q1_confidence: "D" } },
     ]));
 
     expect(res.status).toBe(504);
@@ -127,8 +128,8 @@ describe("POST /api/strategy-batch", () => {
       .mockRejectedValueOnce(new MockAPIConnectionTimeoutError());
 
     const res = await POST(buildRequest([
-      { id: "student-1", name: "Ava", answers: { q1: "A", q2: "B" } },
-      { id: "student-2", name: "Jon", answers: { q1: "C", q2: "D" } },
+      { id: "student-1", name: "Ava", answers: { L1_Q1: "A", L1_Q1_confidence: "B" } },
+      { id: "student-2", name: "Jon", answers: { L1_Q1: "C", L1_Q1_confidence: "D" } },
     ]));
 
     expect(res.status).toBe(200);
@@ -161,10 +162,10 @@ describe("POST /api/strategy-batch", () => {
     );
 
     const requestPromise = POST(buildRequest([
-      { id: "student-1", name: "Ava", answers: { q1: "A", q2: "B" } },
-      { id: "student-2", name: "Jon", answers: { q1: "C", q2: "D" } },
-      { id: "student-3", name: "David", answers: { q1: "E", q2: "F" } },
-      { id: "student-4", name: "Mia", answers: { q1: "G", q2: "H" } },
+      { id: "student-1", name: "Ava", answers: { L1_Q1: "A", L1_Q1_confidence: "B" } },
+      { id: "student-2", name: "Jon", answers: { L1_Q1: "C", L1_Q1_confidence: "D" } },
+      { id: "student-3", name: "David", answers: { L1_Q1: "A", L1_Q1_confidence: "C" } },
+      { id: "student-4", name: "Mia", answers: { L1_Q1: "B", L1_Q1_confidence: "A" } },
     ]));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -180,5 +181,39 @@ describe("POST /api/strategy-batch", () => {
     const data = await res.json();
     expect(data.results).toHaveLength(4);
     expect(data.errors).toEqual([]);
+  });
+
+  it("includes the lesson objective and resolved quiz evidence in the prompt", async () => {
+    createCompletion.mockResolvedValueOnce(buildCompletion("cognitive conflict"));
+
+    const res = await POST(buildRequest([
+      {
+        id: "student-1",
+        name: "Ava",
+        answers: {
+          L1_Q1: "D",
+          L1_Q1_confidence: "B",
+        },
+      },
+    ]));
+
+    expect(res.status).toBe(200);
+    expect(createCompletion).toHaveBeenCalledTimes(1);
+    const firstCall = createCompletion.mock.calls[0]?.[0];
+    const userPrompt = firstCall?.messages?.[1]?.content as string;
+
+    expect(userPrompt).toContain("Lesson objective:");
+    expect(userPrompt).toContain(
+      "Students will construct temporal visual models and causal explanations",
+    );
+    expect(userPrompt).toContain(
+      "A phone drops onto a soft pillow. The phone looks the same afterward.",
+    );
+    expect(userPrompt).toContain(
+      "The force was weak because nothing was damaged.",
+    );
+    expect(userPrompt).toContain(
+      "If nothing looks damaged after the collision, the force must have been weak.",
+    );
   });
 });

@@ -8,6 +8,7 @@ describe("GET /api/lessons/[lessonNumber]", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.lesson_number).toBe(1);
+    expect(data.learning_objective).toBeTruthy();
     expect(data.quiz_items.length).toBeGreaterThan(0);
   });
 

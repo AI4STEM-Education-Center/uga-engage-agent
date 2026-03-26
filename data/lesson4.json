@@ -1,6 +1,7 @@
 {
   "lesson_number": 4,
   "lesson_title": "Lesson 4",
+  "learning_objective": "Students will design multivariable virtual experiments and analyze force-deformation graphs to isolate how applied force, material type, and thickness dictate an object's elastic limit and fracture point.",
   "core_ideas": [
     "All solid objects deform elastically when force is applied to them, up to a point.",
     "Different objects have a different elastic limit, which is the maximum amount of deformation they can withstand, beyond which they will deform permanently.",

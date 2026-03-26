@@ -1,22 +1,13 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+
+import {
+  getLessonGenerationContext,
+  getStrategyContext,
+  type LessonGenerationContext,
+  type StrategyContext,
+} from "@/lib/lesson-context";
 import type { ContentItem, TextMode } from "@/lib/types";
-
-type Answers = Record<string, string | undefined>;
-
-type Plan = {
-  name: string;
-  strategy: string;
-  relevance: Record<string, number>;
-  overallRecommendation: string;
-  recommendationReason: string;
-  summary: string;
-  tldr: string;
-  rationale: string;
-  tactics: string[];
-  cadence: string;
-  checks: string[];
-};
 
 type GeneratedContentItem = Pick<
   ContentItem,
@@ -45,7 +36,10 @@ const normalizeTextModes = (value: unknown): TextMode[] => {
     .filter(isTextMode);
 };
 
-const buildPrompt = (answers: Answers, plan: Plan, strategy: string) => ({
+const buildPrompt = (
+  lessonContext: LessonGenerationContext,
+  strategyContext: StrategyContext,
+) => ({
   system: `You are an education content designer creating short, student-facing science materials.
 Return JSON only with key: items (array).
 Return exactly 1 item in the array.
@@ -56,13 +50,15 @@ Each item must include:
 - textModes: an array using only "questions", "phenomenon", and/or "dialogue"
 - visualBrief: one short sentence describing what the illustration should show
 Do not include teacher directions, facilitation notes, or implementation instructions.`,
-  user: `Student profile:
-${JSON.stringify(answers, null, 2)}
+  user: `Lesson:
+- Title: ${lessonContext.lessonTitle}
+- Learning objective: ${lessonContext.learningObjective}
 
-Engagement plan:
-${JSON.stringify(plan, null, 2)}
+Engagement strategy:
+- Name: ${strategyContext.label}
+- Description: ${strategyContext.description}
 
-Create exactly 1 student-facing content item aligned to the strategy: ${strategy}.
+Create exactly 1 student-facing content item aligned to the lesson objective and strategy.
 The text can use one or a combination of:
 (a) questions,
 (b) a short description of a phenomenon, or
@@ -70,6 +66,7 @@ The text can use one or a combination of:
 
 Requirements:
 - This will be shared directly with students, so write to students instead of to teachers.
+- Make the objective visible in the thinking students are asked to do; do not drift into a generic physics scene.
 - Avoid phrases such as "ask students", "have students", "teacher note", or lesson-delivery instructions.
 - Keep it concrete, vivid, and age-appropriate for middle-school physics learners.
 - The image must clearly reflect the scene or interaction described in the text.
@@ -101,22 +98,40 @@ export async function POST(request: Request) {
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const {
-      answers = {},
-      plan,
+      lessonNumber,
       selectedStrategies = [],
     } = (await request.json()) as {
-      answers?: Answers;
-      plan: Plan;
+      lessonNumber?: number;
       selectedStrategies?: string[];
     };
+    if (typeof lessonNumber !== "number") {
+      return NextResponse.json(
+        { error: "lessonNumber is required." },
+        { status: 400 },
+      );
+    }
+
+    const lessonContext = getLessonGenerationContext(lessonNumber);
+    if (!lessonContext) {
+      return NextResponse.json(
+        { error: `Lesson ${lessonNumber} not found.` },
+        { status: 400 },
+      );
+    }
+
     const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
-    const strategies =
-      selectedStrategies.length > 0 ? selectedStrategies : [plan.strategy];
+    const strategies = selectedStrategies.filter(Boolean);
+    if (strategies.length === 0) {
+      return NextResponse.json(
+        { error: "selectedStrategies must contain at least one strategy." },
+        { status: 400 },
+      );
+    }
     const items: GeneratedResponseItem[] = [];
 
     const strategyResults = await Promise.all(
       strategies.map(async (strategy) => {
-        const prompt = buildPrompt(answers, plan, strategy);
+        const prompt = buildPrompt(lessonContext, getStrategyContext(strategy));
         const completion = await client.chat.completions.create({
           model,
           response_format: { type: "json_object" },

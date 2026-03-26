@@ -24,7 +24,7 @@ describe("getAllLessons", () => {
   it("each lesson should have misconceptions", () => {
     const lessons = getAllLessons();
     for (const lesson of lessons) {
-      expect(lesson.misconceptions.length).toBeGreaterThan(0);
+      expect(Object.keys(lesson.misconceptions).length).toBeGreaterThan(0);
     }
   });
 
@@ -69,6 +69,13 @@ describe("getLessonQuizItems", () => {
       expect(item.options).toHaveProperty("B");
       expect(item.options).toHaveProperty("C");
       expect(item.options).toHaveProperty("D");
+    }
+  });
+
+  it("each lesson should have a learning objective", () => {
+    const lessons = getAllLessons();
+    for (const lesson of lessons) {
+      expect(lesson.learning_objective).toBeTruthy();
     }
   });
 

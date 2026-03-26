@@ -14,7 +14,7 @@ type RawQuizItem = Omit<QuizItem, "type"> & {
 };
 
 type RawLesson = Omit<Lesson, "misconceptions" | "quiz_items"> & {
-  misconceptions: Lesson["misconceptions"] | Record<string, string>;
+  misconceptions: Lesson["misconceptions"];
   quiz_items: RawQuizItem[];
 };
 
@@ -36,9 +36,6 @@ function normalizeQuizItem(rawItem: RawQuizItem): QuizItem {
 function normalizeLesson(rawLesson: RawLesson): Lesson {
   return {
     ...rawLesson,
-    misconceptions: Array.isArray(rawLesson.misconceptions)
-      ? rawLesson.misconceptions
-      : Object.values(rawLesson.misconceptions),
     quiz_items: rawLesson.quiz_items.map(normalizeQuizItem),
   };
 }

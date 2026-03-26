@@ -110,4 +110,24 @@ describe("GET /api/student-answers", () => {
     const data = await res.json();
     expect(data.answer.student_id).toBe("s1");
   });
+
+  it("should filter answers by lesson number when provided", async () => {
+    await POST(new Request("http://localhost:3000/api/student-answers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1", assignmentId: "a1", studentId: "s1", studentName: "Alice", lessonNumber: 1, answers: { Q1: "A" } }),
+    }));
+    await POST(new Request("http://localhost:3000/api/student-answers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: "c1", assignmentId: "a1", studentId: "s2", studentName: "Bob", lessonNumber: 2, answers: { Q1: "B" } }),
+    }));
+
+    const req = new Request("http://localhost:3000/api/student-answers?classId=c1&assignmentId=a1&lessonNumber=1");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.answers).toHaveLength(1);
+    expect(data.answers[0].student_id).toBe("s1");
+  });
 });
