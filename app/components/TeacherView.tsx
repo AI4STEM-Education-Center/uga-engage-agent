@@ -4,13 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { UserContext } from "@/lib/auth";
 import {
-  buildContentMediaDebugHeaders,
-  createContentMediaDebugRequestId,
-  isContentMediaDebugEnabledInBrowser,
-  logContentMediaDebug,
-  summarizeMediaUrl,
-} from "@/lib/content-media-debug";
-import {
   engagementStrategies as strategies,
   getEngagementStrategyDescription,
   getEngagementStrategyLabel,
@@ -1340,28 +1333,16 @@ export default function TeacherView({ user }: Props) {
     if (selectedForPublish.size === 0 || !classId || !assignmentId) return;
     setPublishingContent(true);
     try {
-      const debugEnabled = isContentMediaDebugEnabledInBrowser();
-      const debugRequestId = debugEnabled
-        ? createContentMediaDebugRequestId("teacher-publish")
-        : undefined;
-      const debugHeaders = buildContentMediaDebugHeaders(
-        debugEnabled,
-        debugRequestId,
-      );
       const items: PublishableContentItem[] = content
         .filter((item) => selectedForPublish.has(item.id))
         .map((item) => {
-          const rawImageUrl =
-            images[item.id]?.status === "ready" ? images[item.id]?.url : undefined;
-          const rawVideoUrl =
-            videos[item.id]?.status === "ready" ? videos[item.id]?.url : undefined;
           const imageUrl =
             images[item.id]?.status === "ready"
-              ? getEmbeddablePublishedMediaUrl(rawImageUrl)
+              ? getEmbeddablePublishedMediaUrl(images[item.id]?.url)
               : undefined;
           const videoUrl =
             videos[item.id]?.status === "ready"
-              ? getEmbeddablePublishedMediaUrl(rawVideoUrl)
+              ? getEmbeddablePublishedMediaUrl(videos[item.id]?.url)
               : undefined;
 
           const media: SharedContentMedia = {
@@ -1375,45 +1356,11 @@ export default function TeacherView({ user }: Props) {
           };
         });
 
-      if (debugEnabled) {
-        logContentMediaDebug(
-          "teacher.publish.prepare",
-          {
-            classId,
-            assignmentId,
-            selectedItemIds: Array.from(selectedForPublish),
-            items: content
-              .filter((item) => selectedForPublish.has(item.id))
-              .map((item) => ({
-                contentItemId: item.id,
-                imageState: images[item.id]?.status ?? null,
-                rawImageUrl: summarizeMediaUrl(images[item.id]?.url),
-                publishableImageUrl: summarizeMediaUrl(
-                  items.find((candidate) => candidate.id === item.id)?.media?.image,
-                ),
-                videoState: videos[item.id]?.status ?? null,
-                rawVideoUrl: summarizeMediaUrl(videos[item.id]?.url),
-                publishableVideoUrl: summarizeMediaUrl(
-                  items.find((candidate) => candidate.id === item.id)?.media?.video,
-                ),
-              })),
-          },
-          { enabled: true, requestId: debugRequestId },
-        );
-      }
-
       const res = await fetch("/api/content-publish", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...debugHeaders },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ classId, assignmentId, contentItems: items, publishedBy: user.userId }),
       });
-      if (debugEnabled) {
-        logContentMediaDebug(
-          "teacher.publish.response",
-          { ok: res.ok, status: res.status },
-          { enabled: true, requestId: debugRequestId },
-        );
-      }
       if (!res.ok) throw new Error("Failed to publish content.");
       setPublishedContentIds((prev) => {
         const next = new Set(prev);
@@ -1444,29 +1391,9 @@ export default function TeacherView({ user }: Props) {
       for (const item of pending) {
         if (cancelled) break;
         try {
-          const debugEnabled = isContentMediaDebugEnabledInBrowser();
-          const debugRequestId = debugEnabled
-            ? createContentMediaDebugRequestId("teacher-image")
-            : undefined;
-          const debugHeaders = buildContentMediaDebugHeaders(
-            debugEnabled,
-            debugRequestId,
-          );
-          if (debugEnabled) {
-            logContentMediaDebug(
-              "teacher.image.request",
-              {
-                classId,
-                assignmentId,
-                contentItemId: item.id,
-                lessonNumber: selectedLesson,
-              },
-              { enabled: true, requestId: debugRequestId },
-            );
-          }
           const res = await fetch("/api/engagement-image", {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...debugHeaders },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               item,
               lessonNumber: selectedLesson,
@@ -1479,18 +1406,6 @@ export default function TeacherView({ user }: Props) {
           let data: Record<string, unknown>;
           try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
           if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
-          if (debugEnabled) {
-            logContentMediaDebug(
-              "teacher.image.response",
-              {
-                ok: res.ok,
-                status: res.status,
-                contentItemId: item.id,
-                url: summarizeMediaUrl(data.url),
-              },
-              { enabled: true, requestId: debugRequestId },
-            );
-          }
           if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "ready", url: data.url as string } }));
         } catch (err) {
           if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: err instanceof Error ? err.message : "Image failed." } }));

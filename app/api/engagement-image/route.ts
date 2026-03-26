@@ -2,11 +2,6 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
 import {
-  getContentMediaDebugContext,
-  logContentMediaDebug,
-  summarizeMediaUrl,
-} from "@/lib/content-media-debug";
-import {
   getLessonGenerationContext,
   getStrategyContext,
 } from "@/lib/lesson-context";
@@ -64,7 +59,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const debug = getContentMediaDebugContext(request);
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const {
       item,
@@ -90,21 +84,6 @@ export async function POST(request: Request) {
     const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
     const prompt = buildPrompt(item, lessonNumber);
 
-    if (debug.enabled) {
-      logContentMediaDebug(
-        "api.engagement-image.request",
-        {
-          classId,
-          assignmentId,
-          studentId,
-          contentItemId: item.id ?? null,
-          lessonNumber,
-          model,
-        },
-        debug,
-      );
-    }
-
     // webp + low quality = fast generation + small payload (avoids Amplify 30s timeout)
     const result = await client.images.generate({
       model,
@@ -122,8 +101,6 @@ export async function POST(request: Request) {
     }
 
     let dataUrl = base64 ? `data:image/webp;base64,${base64}` : (url ?? "");
-    const originalDataUrl = dataUrl;
-    let persistedUrl: string | undefined;
 
     // Persist to DB if we have enough context
     if (item.id && classId && assignmentId && studentId) {
@@ -147,28 +124,11 @@ export async function POST(request: Request) {
         );
         if (persisted?.data_url) {
           dataUrl = persisted.data_url;
-          persistedUrl = persisted.data_url;
         }
       } catch (err) {
         console.error("Failed to persist image to DB:", err);
         // Don't fail the response — return the image anyway
       }
-    }
-
-    if (debug.enabled) {
-      logContentMediaDebug(
-        "api.engagement-image.result",
-        {
-          classId,
-          assignmentId,
-          studentId,
-          contentItemId: item.id ?? null,
-          originalUrlSummary: summarizeMediaUrl(originalDataUrl),
-          persistedUrlSummary: summarizeMediaUrl(persistedUrl),
-          responseUrlSummary: summarizeMediaUrl(dataUrl),
-        },
-        debug,
-      );
     }
 
     return NextResponse.json({ url: dataUrl });
