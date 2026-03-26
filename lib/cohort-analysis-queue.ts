@@ -2,32 +2,30 @@ import { SendMessageBatchCommand, SQSClient } from "@aws-sdk/client-sqs";
 
 const DEFAULT_ENGAGE_AWS_REGION = "us-east-2";
 
-const queueUrl = process.env.COHORT_ANALYSIS_QUEUE_URL?.trim();
-const awsRegion = process.env.ENGAGE_AWS_REGION ?? DEFAULT_ENGAGE_AWS_REGION;
-const awsAccessKeyId = process.env.ENGAGE_AWS_ACCESS_KEY_ID;
-const awsSecretAccessKey = process.env.ENGAGE_AWS_SECRET_ACCESS_KEY;
-
-let sqsClient: SQSClient | null = null;
+const getQueueConfig = () => ({
+  queueUrl: process.env.COHORT_ANALYSIS_QUEUE_URL?.trim() ?? "",
+  awsRegion: process.env.ENGAGE_AWS_REGION ?? DEFAULT_ENGAGE_AWS_REGION,
+  awsAccessKeyId: process.env.ENGAGE_AWS_ACCESS_KEY_ID,
+  awsSecretAccessKey: process.env.ENGAGE_AWS_SECRET_ACCESS_KEY,
+});
 
 const getSqsClient = () => {
+  const { queueUrl, awsRegion, awsAccessKeyId, awsSecretAccessKey } =
+    getQueueConfig();
   if (!queueUrl) {
     return null;
   }
 
-  if (!sqsClient) {
-    sqsClient = new SQSClient({
-      region: awsRegion,
-      ...(awsAccessKeyId &&
-        awsSecretAccessKey && {
-          credentials: {
-            accessKeyId: awsAccessKeyId,
-            secretAccessKey: awsSecretAccessKey,
-          },
-        }),
-    });
-  }
-
-  return sqsClient;
+  return new SQSClient({
+    region: awsRegion,
+    ...(awsAccessKeyId &&
+      awsSecretAccessKey && {
+        credentials: {
+          accessKeyId: awsAccessKeyId,
+          secretAccessKey: awsSecretAccessKey,
+        },
+      }),
+  });
 };
 
 const chunkItems = <T,>(items: T[], size: number) => {
@@ -43,7 +41,19 @@ const chunkItems = <T,>(items: T[], size: number) => {
 const buildBatchEntryId = (chunkIndex: number, studentIndex: number) =>
   `student-${chunkIndex}-${studentIndex}`;
 
-export const isCohortAnalysisQueueConfigured = () => Boolean(queueUrl);
+export const getCohortAnalysisQueueConfigIssues = () => {
+  const { queueUrl } = getQueueConfig();
+  const issues: string[] = [];
+
+  if (!queueUrl) {
+    issues.push("COHORT_ANALYSIS_QUEUE_URL");
+  }
+
+  return issues;
+};
+
+export const isCohortAnalysisQueueConfigured = () =>
+  getCohortAnalysisQueueConfigIssues().length === 0;
 
 export const enqueueCohortJobStudents = async ({
   jobId,
@@ -65,6 +75,7 @@ export const enqueueCohortJobStudents = async ({
     answers: Record<string, string | undefined>;
   }>;
 }) => {
+  const { queueUrl } = getQueueConfig();
   if (!queueUrl) {
     throw new Error("COHORT_ANALYSIS_QUEUE_URL is not configured.");
   }

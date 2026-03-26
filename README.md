@@ -88,6 +88,8 @@ FEEDBACK_TICKET_CONCURRENCY=6
 
 Set `ENGAGE_AWS_REGION` to the actual region where your DynamoDB table and S3 bucket live. For the current shared AWS setup, that is `us-east-2`.
 
+If you want the local app to push uncached cohort analysis work to SQS, set `COHORT_ANALYSIS_QUEUE_URL` in `.env` (or `.env.local`) before starting `npm run dev`. If that variable is missing, the teacher flow falls back to inline cohort analysis on the app server.
+
 ### 3. Run the development server
 
 ```bash
@@ -200,6 +202,13 @@ Package the worker with:
 ./scripts/deploy-cohort-analysis-worker.sh
 ```
 
+Deploy the packaged worker to Lambda with:
+
+```bash
+COHORT_ANALYSIS_WORKER_FUNCTION_NAME=genius-engage-cohort-analysis-worker \
+./scripts/update-cohort-analysis-worker.sh
+```
+
 The resulting zip includes the worker code, production dependencies, and the
 lesson JSON files from `data/`.
 
@@ -213,3 +222,26 @@ Recommended worker configuration:
   CloudWatch Logs permissions
 - An SQS event source mapping from the queue to the worker Lambda
 - Queue visibility timeout longer than the worker runtime budget
+
+### Automated Lambda deploy
+
+The repository includes `.github/workflows/deploy-cohort-analysis-worker.yml`.
+It deploys the worker automatically on pushes to `main` when any of these
+change:
+
+- `workers/cohort-analysis-worker/**`
+- `data/lesson*.json`
+- `scripts/deploy-cohort-analysis-worker.sh`
+- `scripts/update-cohort-analysis-worker.sh`
+
+It also supports manual `workflow_dispatch` runs for branch testing.
+
+Configure these GitHub repository settings before using it:
+
+- Secret: `AWS_ROLE_TO_ASSUME`
+- Variable: `COHORT_ANALYSIS_WORKER_FUNCTION_NAME`
+- Variable: `ENGAGE_AWS_REGION` (optional; defaults to `us-east-2`)
+
+The assumed AWS role needs permission to update Lambda function code for the
+worker. The workflow updates code only; queue mappings, triggers, and Lambda
+environment variables remain managed in AWS.

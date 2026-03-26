@@ -51,6 +51,7 @@ type StrategyJobStartResponse = {
   queuedStudents?: number;
   totalStudents?: number;
   status?: "queued";
+  missingEnv?: string[];
   error?: string;
 };
 
@@ -1287,6 +1288,17 @@ export default function TeacherView({ user }: Props) {
         const startData = await parseJsonResponse<StrategyJobStartResponse>(startRes);
 
         if (startRes.status === 501) {
+          const missingEnv = (startData?.missingEnv ?? [])
+            .filter((name) => typeof name === "string" && name.length > 0);
+          cohortWarning =
+            missingEnv.length > 0
+              ? `Cohort analysis queue is not configured on this environment (${missingEnv.join(", ")}). Running inline analysis instead.`
+              : `${startData?.error ?? "Cohort analysis queue is not configured on this environment."} Running inline analysis instead.`;
+          setCohortProgress({
+            processed: initialResults.length,
+            total: studentsForApi.length,
+            currentName: "Queue not configured here; analyzing inline instead...",
+          });
           await runSynchronousCohortAnalysis({
             lessonNumber,
             studentsForApi,

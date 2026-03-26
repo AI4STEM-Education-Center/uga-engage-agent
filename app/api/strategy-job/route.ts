@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import {
   enqueueCohortJobStudents,
+  getCohortAnalysisQueueConfigIssues,
   isCohortAnalysisQueueConfigured,
 } from "@/lib/cohort-analysis-queue";
 import { createCohortJob, setCohortJobStatus } from "@/lib/nosql";
@@ -20,10 +21,12 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     if (!isCohortAnalysisQueueConfigured()) {
+      const missingEnv = getCohortAnalysisQueueConfigIssues();
       return NextResponse.json(
         {
           error:
             "Cohort analysis queue is not configured on this environment.",
+          missingEnv,
         },
         { status: 501 },
       );

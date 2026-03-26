@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   createCohortJob,
   enqueueCohortJobStudents,
+  getCohortAnalysisQueueConfigIssues,
   getCohortJob,
   isCohortAnalysisQueueConfigured,
   setCohortJobStatus,
@@ -10,6 +11,7 @@ const {
 } = vi.hoisted(() => ({
   createCohortJob: vi.fn(),
   enqueueCohortJobStudents: vi.fn(),
+  getCohortAnalysisQueueConfigIssues: vi.fn(),
   getCohortJob: vi.fn(),
   isCohortAnalysisQueueConfigured: vi.fn(),
   setCohortJobStatus: vi.fn(),
@@ -24,6 +26,7 @@ vi.mock("node:crypto", () => ({
 
 vi.mock("@/lib/cohort-analysis-queue", () => ({
   enqueueCohortJobStudents,
+  getCohortAnalysisQueueConfigIssues,
   isCohortAnalysisQueueConfigured,
 }));
 
@@ -39,6 +42,7 @@ const { GET } = await import("@/app/api/strategy-job/[jobId]/route");
 beforeEach(() => {
   createCohortJob.mockReset();
   enqueueCohortJobStudents.mockReset();
+  getCohortAnalysisQueueConfigIssues.mockReset();
   getCohortJob.mockReset();
   isCohortAnalysisQueueConfigured.mockReset();
   setCohortJobStatus.mockReset();
@@ -96,6 +100,9 @@ describe("POST /api/strategy-job", () => {
 
   it("returns 501 when the queue is not configured", async () => {
     isCohortAnalysisQueueConfigured.mockReturnValue(false);
+    getCohortAnalysisQueueConfigIssues.mockReturnValue([
+      "COHORT_ANALYSIS_QUEUE_URL",
+    ]);
 
     const res = await POST(
       new Request("http://localhost:3000/api/strategy-job", {
@@ -112,9 +119,10 @@ describe("POST /api/strategy-job", () => {
 
     expect(res.status).toBe(501);
     const data = await res.json();
-    expect(data.error).toBe(
-      "Cohort analysis queue is not configured on this environment.",
-    );
+    expect(data).toEqual({
+      error: "Cohort analysis queue is not configured on this environment.",
+      missingEnv: ["COHORT_ANALYSIS_QUEUE_URL"],
+    });
   });
 
   it("returns 400 when lessonNumber is missing", async () => {

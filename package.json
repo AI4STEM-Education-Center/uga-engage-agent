@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "generate:feedback-tickets": "node scripts/generate_feedback_tickets.mjs",
+    "package:cohort-analysis-worker": "./scripts/deploy-cohort-analysis-worker.sh",
+    "deploy:cohort-analysis-worker": "./scripts/update-cohort-analysis-worker.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },
