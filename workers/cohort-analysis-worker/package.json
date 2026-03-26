@@ -1,0 +1,11 @@
+{
+  "name": "cohort-analysis-worker",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.985.0",
+    "@aws-sdk/lib-dynamodb": "^3.985.0",
+    "openai": "^6.17.0"
+  }
+}

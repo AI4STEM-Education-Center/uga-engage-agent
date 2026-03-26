@@ -1,0 +1,54 @@
+name: Deploy Cohort Analysis Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-cohort-analysis-worker.yml"
+      - "data/lesson*.json"
+      - "scripts/deploy-cohort-analysis-worker.sh"
+      - "scripts/update-cohort-analysis-worker.sh"
+      - "workers/cohort-analysis-worker/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cohort-analysis-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.ENGAGE_AWS_REGION || 'us-east-2' }}
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      COHORT_ANALYSIS_WORKER_FUNCTION_NAME: ${{ vars.COHORT_ANALYSIS_WORKER_FUNCTION_NAME }}
+    steps:
+      - name: Validate deploy configuration
+        run: |
+          if [[ -z "$AWS_ROLE_TO_ASSUME" ]]; then
+            echo "::error::Set the AWS_ROLE_TO_ASSUME GitHub secret before running this workflow."
+            exit 1
+          fi
+          if [[ -z "$COHORT_ANALYSIS_WORKER_FUNCTION_NAME" ]]; then
+            echo "::error::Set the COHORT_ANALYSIS_WORKER_FUNCTION_NAME GitHub variable before running this workflow."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+
+      - name: Deploy Lambda code
+        run: ./scripts/update-cohort-analysis-worker.sh

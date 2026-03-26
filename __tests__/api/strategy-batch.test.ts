@@ -49,7 +49,10 @@ const { __resetCache } = (await import("@/lib/nosql")) as unknown as {
   __resetCache: () => void;
 };
 
-const buildRequest = (students: Array<Record<string, unknown>>) =>
+const buildRequest = (
+  students: Array<Record<string, unknown>>,
+  options?: { forceRefresh?: boolean },
+) =>
   new Request("http://localhost:3000/api/strategy-batch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -57,6 +60,7 @@ const buildRequest = (students: Array<Record<string, unknown>>) =>
       classId: "class-1",
       assignmentId: "assignment-1",
       lessonNumber: 1,
+      forceRefresh: options?.forceRefresh,
       students,
     }),
   });
@@ -215,5 +219,50 @@ describe("POST /api/strategy-batch", () => {
     expect(userPrompt).toContain(
       "If nothing looks damaged after the collision, the force must have been weak.",
     );
+  });
+
+  it("bypasses cached plans when forceRefresh is true", async () => {
+    createCompletion.mockResolvedValueOnce(buildCompletion("analogy"));
+
+    const firstRes = await POST(buildRequest([
+      {
+        id: "student-1",
+        name: "Ava",
+        answers: {
+          L1_Q1: "D",
+          L1_Q1_confidence: "B",
+        },
+      },
+    ]));
+
+    expect(firstRes.status).toBe(200);
+    expect(createCompletion).toHaveBeenCalledTimes(1);
+
+    createCompletion.mockReset();
+    createCompletion.mockResolvedValueOnce(buildCompletion("cognitive conflict"));
+
+    const secondRes = await POST(buildRequest([
+      {
+        id: "student-1",
+        name: "Ava",
+        answers: {
+          L1_Q1: "D",
+          L1_Q1_confidence: "B",
+        },
+      },
+    ], { forceRefresh: true }));
+
+    expect(secondRes.status).toBe(200);
+    expect(createCompletion).toHaveBeenCalledTimes(1);
+
+    const data = await secondRes.json();
+    expect(data.results).toMatchObject([
+      {
+        id: "student-1",
+        plan: {
+          strategy: "cognitive conflict",
+        },
+      },
+    ]);
   });
 });
