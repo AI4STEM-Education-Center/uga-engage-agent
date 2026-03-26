@@ -1,48 +1,45 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+
+import {
+  getLessonGenerationContext,
+  getStrategyContext,
+} from "@/lib/lesson-context";
 import { getMedia, upsertMedia } from "@/lib/nosql";
-
-type Answers = Record<string, string | undefined>;
-
-type Plan = {
-  name: string;
-  summary: string;
-  rationale: string;
-  tactics: string[];
-  cadence: string;
-  checks: string[];
-};
 
 type ContentItem = {
   id?: string;
   type: string;
+  strategy: string;
   title: string;
   body: string;
   textModes?: string[];
   visualBrief?: string;
 };
 
-const buildPrompt = (
-  item: ContentItem,
-  plan: Plan | null,
-  answers: Answers,
-) => {
-  const topic = answers.topic?.trim() || "gravity";
+const buildPrompt = (item: ContentItem, lessonNumber: number) => {
+  const lessonContext = getLessonGenerationContext(lessonNumber);
+  if (!lessonContext) {
+    throw new Error(`Lesson ${lessonNumber} not found.`);
+  }
+
+  const strategyContext = getStrategyContext(item.strategy);
   const gradeLevel = "8th grade";
-  const planName = plan?.name ?? "Engagement plan";
   const textModes = item.textModes?.length ? item.textModes.join(", ") : item.type;
   const visualBrief = item.visualBrief?.trim();
 
   return `Create a simple, student-friendly illustration for an ${gradeLevel} physics lesson.
 This image will be shown directly to students next to the material below.
-Topic: ${topic}
-Strategy inspiration: ${planName}
+Lesson: ${lessonContext.lessonTitle}
+Learning objective: ${lessonContext.learningObjective}
+Strategy: ${strategyContext.label} - ${strategyContext.description}
 Text style: ${textModes}
 Title: ${item.title}
 Student-facing text:
 ${item.body}
 ${visualBrief ? `Visual brief: ${visualBrief}` : "Visual brief: Show the main scene, phenomenon, or conversation implied by the text."}
 
+Ensure the image supports the lesson objective through the scene students will analyze.
 If the material includes dialogue, clearly show the speakers and what they are reacting to.
 If the material includes questions, show the scene students should reason about.
 If the material describes a phenomenon, make that phenomenon visually central.
@@ -65,22 +62,27 @@ export async function POST(request: Request) {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const {
       item,
-      plan,
-      answers = {},
+      lessonNumber,
       classId,
       assignmentId,
       studentId,
     } = (await request.json()) as {
       item: ContentItem;
-      plan: Plan | null;
-      answers?: Answers;
+      lessonNumber?: number;
       classId?: string;
       assignmentId?: string;
       studentId?: string;
     };
 
+    if (typeof lessonNumber !== "number") {
+      return NextResponse.json(
+        { error: "lessonNumber is required." },
+        { status: 400 },
+      );
+    }
+
     const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
-    const prompt = buildPrompt(item, plan, answers);
+    const prompt = buildPrompt(item, lessonNumber);
 
     // webp + low quality = fast generation + small payload (avoids Amplify 30s timeout)
     const result = await client.images.generate({

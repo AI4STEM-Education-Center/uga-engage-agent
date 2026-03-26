@@ -59,8 +59,9 @@ export type QuizItem = {
 export type Lesson = {
   lesson_number: number;
   lesson_title: string;
+  learning_objective: string;
   core_ideas: string[];
-  misconceptions: string[];
+  misconceptions: Record<string, string>;
   quiz_items: QuizItem[];
 };
 

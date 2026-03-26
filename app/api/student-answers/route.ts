@@ -6,6 +6,7 @@ export async function GET(request: Request) {
   const classId = searchParams.get("classId");
   const assignmentId = searchParams.get("assignmentId");
   const studentId = searchParams.get("studentId");
+  const lessonNumberParam = searchParams.get("lessonNumber");
 
   if (!classId || !assignmentId) {
     return NextResponse.json(
@@ -14,13 +15,32 @@ export async function GET(request: Request) {
     );
   }
 
+  const lessonNumber =
+    lessonNumberParam === null ? undefined : Number.parseInt(lessonNumberParam, 10);
+  if (
+    lessonNumberParam !== null &&
+    (Number.isNaN(lessonNumber) || (lessonNumber ?? 0) < 1)
+  ) {
+    return NextResponse.json(
+      { error: "lessonNumber must be a positive integer when provided." },
+      { status: 400 },
+    );
+  }
+
   if (studentId) {
     const answer = await getStudentAnswer(classId, assignmentId, studentId);
+    if (lessonNumber !== undefined && answer?.lesson_number !== lessonNumber) {
+      return NextResponse.json({ answer: null });
+    }
     return NextResponse.json({ answer });
   }
 
   const answers = await listStudentAnswers(classId, assignmentId);
-  return NextResponse.json({ answers });
+  const filteredAnswers =
+    lessonNumber === undefined
+      ? answers
+      : answers.filter((answer) => answer.lesson_number === lessonNumber);
+  return NextResponse.json({ answers: filteredAnswers });
 }
 
 export async function POST(request: Request) {
