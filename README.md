@@ -216,6 +216,9 @@ Recommended worker configuration:
 
 - Environment variables: `OPENAI_API_KEY`, `DYNAMODB_TABLE`, and either
   `ENGAGE_AWS_REGION` or the default Lambda `AWS_REGION`
+- Optional retry alignment: `COHORT_ANALYSIS_QUEUE_MAX_RECEIVE_COUNT` if you
+  want the worker's final-failure threshold to match a non-default SQS
+  `maxReceiveCount` (defaults to `3`)
 - Optional local/non-role credentials:
   `ENGAGE_AWS_ACCESS_KEY_ID` and `ENGAGE_AWS_SECRET_ACCESS_KEY`
 - IAM permissions for DynamoDB reads/writes on the app table plus standard
