@@ -3,11 +3,17 @@ const STRATEGY_PLAN_CACHE_VERSION = 2;
 type CachedPlanEnvelope<TPlan> = {
   promptVersion: number;
   lessonNumber: number | null;
+  invalidatedAt?: string | null;
   plan: TPlan;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const isCachedPlanEnvelope = <TPlan>(
+  value: unknown,
+): value is CachedPlanEnvelope<TPlan> =>
+  isRecord(value) && "promptVersion" in value && "plan" in value;
 
 export const serializeCachedPlan = <TPlan>(
   plan: TPlan,
@@ -19,6 +25,27 @@ export const serializeCachedPlan = <TPlan>(
     plan,
   } satisfies CachedPlanEnvelope<TPlan>);
 
+export const invalidateSerializedCachedPlan = (
+  planJson: string,
+  invalidatedAt = new Date().toISOString(),
+) => {
+  const parsed = JSON.parse(planJson) as unknown;
+
+  if (isCachedPlanEnvelope(parsed)) {
+    return JSON.stringify({
+      ...parsed,
+      invalidatedAt,
+    } satisfies CachedPlanEnvelope<unknown>);
+  }
+
+  return JSON.stringify({
+    promptVersion: STRATEGY_PLAN_CACHE_VERSION,
+    lessonNumber: null,
+    invalidatedAt,
+    plan: parsed,
+  } satisfies CachedPlanEnvelope<unknown>);
+};
+
 export const deserializeCachedPlan = <TPlan>(
   planJson: string,
   options?: {
@@ -28,14 +55,14 @@ export const deserializeCachedPlan = <TPlan>(
 ): TPlan | null => {
   const parsed = JSON.parse(planJson) as unknown;
 
-  if (
-    isRecord(parsed) &&
-    "promptVersion" in parsed &&
-    "plan" in parsed
-  ) {
+  if (isCachedPlanEnvelope<TPlan>(parsed)) {
     const promptVersion =
       typeof parsed.promptVersion === "number" ? parsed.promptVersion : null;
     if (promptVersion !== STRATEGY_PLAN_CACHE_VERSION) {
+      return null;
+    }
+
+    if (typeof parsed.invalidatedAt === "string" && parsed.invalidatedAt.length > 0) {
       return null;
     }
 

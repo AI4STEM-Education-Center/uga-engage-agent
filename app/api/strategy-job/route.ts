@@ -7,7 +7,11 @@ import {
   getCohortAnalysisQueueConfigIssues,
   isCohortAnalysisQueueConfigured,
 } from "@/lib/cohort-analysis-queue";
-import { createCohortJob, setCohortJobStatus } from "@/lib/nosql";
+import {
+  createCohortJob,
+  invalidateCachedPlanJson,
+  setCohortJobStatus,
+} from "@/lib/nosql";
 
 type Student = {
   id: string;
@@ -82,6 +86,14 @@ export async function POST(request: Request) {
     );
 
     try {
+      if (shouldForceRefresh) {
+        await Promise.all(
+          normalizedStudents.map((student) =>
+            invalidateCachedPlanJson(classKey, assignmentKey, student.id),
+          ),
+        );
+      }
+
       await enqueueCohortJobStudents({
         jobId,
         classId: classKey,
