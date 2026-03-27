@@ -12,6 +12,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { invalidateSerializedCachedPlan } from "@/lib/strategy-plan-cache";
+
 const DYNAMODB_MAX_ITEM_BYTES = 400_000;
 
 type StrategyCacheRecord = {
@@ -348,6 +350,29 @@ export const upsertCachedPlanJson = async (
     };
     await persistStore(store);
   });
+};
+
+export const invalidateCachedPlanJson = async (
+  classId: string,
+  assignmentId: string,
+  studentId: string,
+) => {
+  const existingPlanJson = await getCachedPlanJson(
+    classId,
+    assignmentId,
+    studentId,
+  );
+  if (!existingPlanJson) {
+    return false;
+  }
+
+  await upsertCachedPlanJson(
+    classId,
+    assignmentId,
+    studentId,
+    invalidateSerializedCachedPlan(existingPlanJson),
+  );
+  return true;
 };
 
 export type CachedPlanRecord = {

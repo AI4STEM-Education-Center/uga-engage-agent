@@ -5,6 +5,7 @@ const {
   enqueueCohortJobStudents,
   getCohortAnalysisQueueConfigIssues,
   getCohortJob,
+  invalidateCachedPlanJson,
   isCohortAnalysisQueueConfigured,
   setCohortJobStatus,
   randomUUID,
@@ -13,6 +14,7 @@ const {
   enqueueCohortJobStudents: vi.fn(),
   getCohortAnalysisQueueConfigIssues: vi.fn(),
   getCohortJob: vi.fn(),
+  invalidateCachedPlanJson: vi.fn(),
   isCohortAnalysisQueueConfigured: vi.fn(),
   setCohortJobStatus: vi.fn(),
   randomUUID: vi.fn(() => "job-123"),
@@ -33,6 +35,7 @@ vi.mock("@/lib/cohort-analysis-queue", () => ({
 vi.mock("@/lib/nosql", () => ({
   createCohortJob,
   getCohortJob,
+  invalidateCachedPlanJson,
   setCohortJobStatus,
 }));
 
@@ -44,6 +47,7 @@ beforeEach(() => {
   enqueueCohortJobStudents.mockReset();
   getCohortAnalysisQueueConfigIssues.mockReset();
   getCohortJob.mockReset();
+  invalidateCachedPlanJson.mockReset();
   isCohortAnalysisQueueConfigured.mockReset();
   setCohortJobStatus.mockReset();
   randomUUID.mockClear();
@@ -53,6 +57,7 @@ describe("POST /api/strategy-job", () => {
   it("creates a cohort job and enqueues uncached students", async () => {
     isCohortAnalysisQueueConfigured.mockReturnValue(true);
     createCohortJob.mockResolvedValue(undefined);
+    invalidateCachedPlanJson.mockResolvedValue(false);
     enqueueCohortJobStudents.mockResolvedValue(undefined);
 
     const res = await POST(
@@ -85,6 +90,7 @@ describe("POST /api/strategy-job", () => {
       "assignment-1",
       2,
     );
+    expect(invalidateCachedPlanJson).not.toHaveBeenCalled();
     expect(enqueueCohortJobStudents).toHaveBeenCalledWith({
       jobId: "job-123",
       classId: "class-1",
@@ -102,6 +108,7 @@ describe("POST /api/strategy-job", () => {
   it("passes forceRefresh through to the queue payload", async () => {
     isCohortAnalysisQueueConfigured.mockReturnValue(true);
     createCohortJob.mockResolvedValue(undefined);
+    invalidateCachedPlanJson.mockResolvedValue(true);
     enqueueCohortJobStudents.mockResolvedValue(undefined);
 
     const res = await POST(
@@ -121,6 +128,11 @@ describe("POST /api/strategy-job", () => {
     );
 
     expect(res.status).toBe(201);
+    expect(invalidateCachedPlanJson).toHaveBeenCalledWith(
+      "class-1",
+      "assignment-1",
+      "student-1",
+    );
     expect(enqueueCohortJobStudents).toHaveBeenCalledWith({
       jobId: "job-123",
       classId: "class-1",

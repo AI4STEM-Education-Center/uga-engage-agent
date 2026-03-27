@@ -30,23 +30,41 @@ vi.mock("openai", () => {
 
 vi.mock("@/lib/nosql", () => {
   const cache = new Map<string, string>();
+  const invalidated = new Set<string>();
+  const getKey = (classId: string, assignmentId: string, studentId: string) =>
+    `${classId}:${assignmentId}:${studentId}`;
 
   return {
     getCachedPlanJson: vi.fn(async (classId: string, assignmentId: string, studentId: string) => {
-      return cache.get(`${classId}:${assignmentId}:${studentId}`) ?? null;
+      const key = getKey(classId, assignmentId, studentId);
+      if (invalidated.has(key)) {
+        return null;
+      }
+      return cache.get(key) ?? null;
+    }),
+    invalidateCachedPlanJson: vi.fn(async (classId: string, assignmentId: string, studentId: string) => {
+      const key = getKey(classId, assignmentId, studentId);
+      if (cache.has(key)) {
+        invalidated.add(key);
+      }
+      return cache.has(key);
     }),
     upsertCachedPlanJson: vi.fn(async (classId: string, assignmentId: string, studentId: string, planJson: string) => {
-      cache.set(`${classId}:${assignmentId}:${studentId}`, planJson);
+      const key = getKey(classId, assignmentId, studentId);
+      invalidated.delete(key);
+      cache.set(key, planJson);
     }),
     __resetCache: () => {
       cache.clear();
+      invalidated.clear();
     },
   };
 });
 
 const { POST } = await import("@/app/api/strategy-batch/route");
-const { __resetCache } = (await import("@/lib/nosql")) as unknown as {
+const { __resetCache, invalidateCachedPlanJson } = (await import("@/lib/nosql")) as unknown as {
   __resetCache: () => void;
+  invalidateCachedPlanJson: ReturnType<typeof vi.fn>;
 };
 
 const buildRequest = (
@@ -68,6 +86,7 @@ const buildRequest = (
 beforeEach(() => {
   process.env.OPENAI_API_KEY = "test-key";
   createCompletion.mockReset();
+  invalidateCachedPlanJson.mockReset();
   __resetCache();
 });
 
@@ -253,6 +272,11 @@ describe("POST /api/strategy-batch", () => {
     ], { forceRefresh: true }));
 
     expect(secondRes.status).toBe(200);
+    expect(invalidateCachedPlanJson).toHaveBeenCalledWith(
+      "class-1",
+      "assignment-1",
+      "student-1",
+    );
     expect(createCompletion).toHaveBeenCalledTimes(1);
 
     const data = await secondRes.json();

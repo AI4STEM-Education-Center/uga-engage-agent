@@ -229,6 +229,10 @@ const deserializeCachedPlan = (planJson, options = {}) => {
       return null;
     }
 
+    if (typeof parsed.invalidatedAt === "string" && parsed.invalidatedAt.length > 0) {
+      return null;
+    }
+
     if (
       typeof options.lessonNumber === "number" &&
       parsed.lessonNumber !== options.lessonNumber

@@ -7,7 +7,11 @@ import {
   type LessonGenerationContext,
   type ResolvedQuizEvidence,
 } from "@/lib/lesson-context";
-import { getCachedPlanJson, upsertCachedPlanJson } from "@/lib/nosql";
+import {
+  getCachedPlanJson,
+  invalidateCachedPlanJson,
+  upsertCachedPlanJson,
+} from "@/lib/nosql";
 import {
   deserializeCachedPlan,
   serializeCachedPlan,
@@ -267,6 +271,14 @@ export async function POST(request: Request) {
     const shouldForceRefresh = forceRefresh === true;
     const results: StudentStrategyResult[] = [];
     const errors: StudentStrategyError[] = [];
+
+    if (shouldForceRefresh) {
+      await Promise.all(
+        students.map((student) =>
+          invalidateCachedPlanJson(classKey, assignmentKey, student.id),
+        ),
+      );
+    }
 
     const studentChunks = chunkItems(students, STRATEGY_BATCH_CONCURRENCY);
     for (const studentChunk of studentChunks) {
