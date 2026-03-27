@@ -71,6 +71,7 @@ type StrategyJobStatusResponse = {
   };
   results?: StudentStrategyResult[];
   errors?: Array<{ id?: string; name?: string; error?: string }>;
+  retrying?: Array<{ id?: string; name?: string; error?: string }>;
   distribution?: Record<string, number>;
   error?: string;
 };
@@ -1366,6 +1367,15 @@ export default function TeacherView({ user }: Props) {
             const processedStudents = statusData.job.processedStudents ?? 0;
             const queuedStudents = statusData.job.totalStudents ?? uncachedStudents.length;
             const terminal = isTerminalCohortJobStatus(statusData.job.status);
+            const retryingStudents = (statusData.retrying ?? [])
+              .map((student) => student.name)
+              .filter((name): name is string => Boolean(name));
+            const retryingLabel =
+              retryingStudents.length === 1
+                ? `Waiting to retry ${retryingStudents[0]}...`
+                : retryingStudents.length > 1
+                  ? `Waiting to retry ${retryingStudents.length} students...`
+                  : null;
 
             setCohortProgress({
               processed: Math.min(
@@ -1379,6 +1389,8 @@ export default function TeacherView({ user }: Props) {
                   ? forceRefresh
                     ? `Queued ${queuedStudents} student${queuedStudents === 1 ? "" : "s"} for reanalysis...`
                     : `Queued ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"} for analysis...`
+                  : retryingLabel
+                    ? retryingLabel
                   : forceRefresh
                     ? `Reanalyzing ${processedStudents} of ${queuedStudents} student${queuedStudents === 1 ? "" : "s"}...`
                     : `Analyzing ${processedStudents} of ${queuedStudents} uncached student${queuedStudents === 1 ? "" : "s"}...`,

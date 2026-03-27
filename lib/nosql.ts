@@ -91,7 +91,7 @@ export type CohortJobStudentRecord = {
   assignment_id: string;
   student_id: string;
   student_name: string;
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "retrying";
   source?: "cache" | "model" | null;
   plan_json?: string;
   timing?: Record<string, unknown>;

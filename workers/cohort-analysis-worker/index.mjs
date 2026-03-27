@@ -12,6 +12,7 @@ import OpenAI, { APIConnectionTimeoutError } from "openai";
 
 const STRATEGY_REQUEST_TIMEOUT_MS = 45_000;
 const STRATEGY_PLAN_CACHE_VERSION = 2;
+const DEFAULT_QUEUE_MAX_RECEIVE_COUNT = 3;
 
 const workerDir = path.dirname(fileURLToPath(import.meta.url));
 const lessonDataDir = path.join(workerDir, "data");
@@ -297,6 +298,36 @@ const openai = new OpenAI({
   maxRetries: 0,
 });
 
+const isTerminalStudentStatus = (status) => status === "completed" || status === "failed";
+
+const isProcessedStudentStatus = (status) => isTerminalStudentStatus(status);
+
+export const getJobCounterDeltas = (previousStatus, nextStatus) => ({
+  processedDelta:
+    Number(isProcessedStudentStatus(nextStatus)) -
+    Number(isProcessedStudentStatus(previousStatus)),
+  completedDelta: Number(nextStatus === "completed") - Number(previousStatus === "completed"),
+  failedDelta: Number(nextStatus === "failed") - Number(previousStatus === "failed"),
+});
+
+export const getApproximateReceiveCount = (record) => {
+  const parsed = Number(record?.attributes?.ApproximateReceiveCount ?? 1);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
+export const getMaxReceiveCount = () => {
+  const parsed = Number(
+    process.env.COHORT_ANALYSIS_QUEUE_MAX_RECEIVE_COUNT ??
+      DEFAULT_QUEUE_MAX_RECEIVE_COUNT,
+  );
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_QUEUE_MAX_RECEIVE_COUNT;
+};
+
+export const isFinalReceiveAttempt = (record, maxReceiveCount = getMaxReceiveCount()) =>
+  getApproximateReceiveCount(record) >= maxReceiveCount;
+
 const getCachedPlanJson = async (classId, assignmentId, studentId) => {
   const result = await dynamo.send(
     new GetCommand({
@@ -331,15 +362,50 @@ const upsertCachedPlanJson = async (classId, assignmentId, studentId, planJson) 
 
 const jobPk = (jobId) => `JOB#${jobId}`;
 
+const getStudentResultStatus = async (jobId, studentId) => {
+  const result = await dynamo.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: {
+        class_id: jobPk(jobId),
+        record_id: `STUDENT#${studentId}`,
+      },
+    }),
+  );
+
+  const status = result.Item?.status;
+  return typeof status === "string" ? status : null;
+};
+
 const updateJobMeta = async ({
   jobId,
   classId,
   assignmentId,
   totalStudents,
-  completedDelta,
-  failedDelta,
+  previousStatus = null,
+  nextStatus,
 }) => {
+  const { processedDelta, completedDelta, failedDelta } = getJobCounterDeltas(
+    previousStatus,
+    nextStatus,
+  );
   const timestamp = nowIso();
+  const expressionAttributeValues = {
+    ":recordType": "cohort_job",
+    ":classId": classId,
+    ":assignmentId": assignmentId,
+    ":totalStudents": totalStudents,
+    ":createdAt": timestamp,
+    ":updatedAt": timestamp,
+    ":processedDelta": processedDelta,
+    ":completedDelta": completedDelta,
+    ":failedDelta": failedDelta,
+  };
+  const addClauses = [
+    processedDelta !== 0 ? "processed_students :processedDelta" : null,
+    completedDelta !== 0 ? "completed_students :completedDelta" : null,
+    failedDelta !== 0 ? "failed_students :failedDelta" : null,
+  ].filter(Boolean);
   const result = await dynamo.send(
     new UpdateCommand({
       TableName: tableName,
@@ -353,20 +419,8 @@ const updateJobMeta = async ({
           total_students = if_not_exists(total_students, :totalStudents),
           created_at = if_not_exists(created_at, :createdAt),
           updated_at = :updatedAt
-        ADD processed_students :processedDelta,
-          completed_students :completedDelta,
-          failed_students :failedDelta`,
-      ExpressionAttributeValues: {
-        ":recordType": "cohort_job",
-        ":classId": classId,
-        ":assignmentId": assignmentId,
-        ":totalStudents": totalStudents,
-        ":createdAt": timestamp,
-        ":updatedAt": timestamp,
-        ":processedDelta": 1,
-        ":completedDelta": completedDelta,
-        ":failedDelta": failedDelta,
-      },
+        ${addClauses.length > 0 ? `ADD ${addClauses.join(", ")}` : ""}`,
+      ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: "ALL_NEW",
     }),
   );
@@ -407,7 +461,7 @@ const updateJobMeta = async ({
           "#status": "status",
         },
         ExpressionAttributeValues: {
-          ":status": "running",
+          ":status": nextStatus === "retrying" || processedStudents > 0 ? "running" : "queued",
           ":updatedAt": nowIso(),
         },
       }),
@@ -426,7 +480,7 @@ const putStudentResult = async ({
   timing,
   error,
 }) => {
-  await dynamo.send(
+  const result = await dynamo.send(
     new PutCommand({
       TableName: tableName,
       Item: {
@@ -444,8 +498,12 @@ const putStudentResult = async ({
         error: error ?? undefined,
         updated_at: nowIso(),
       },
+      ReturnValues: "ALL_OLD",
     }),
   );
+
+  const previousStatus = result.Attributes?.status;
+  return typeof previousStatus === "string" ? previousStatus : null;
 };
 
 const normalizeLessonNumber = (value) => {
@@ -507,6 +565,26 @@ const processRecord = async (record) => {
     student,
   } =
     payload;
+  const attemptNumber = getApproximateReceiveCount(record);
+  const maxReceiveCount = getMaxReceiveCount();
+  const finalAttempt = isFinalReceiveAttempt(record, maxReceiveCount);
+
+  const existingStatus = await getStudentResultStatus(jobId, student.id);
+  if (isTerminalStudentStatus(existingStatus)) {
+    console.info(
+      "cohort-analysis-worker duplicate terminal result skipped",
+      JSON.stringify({
+        jobId,
+        classId,
+        assignmentId,
+        studentId: student.id,
+        attemptNumber,
+        maxReceiveCount,
+        existingStatus,
+      }),
+    );
+    return;
+  }
 
   let source = "model";
   let cacheReadMs = 0;
@@ -598,7 +676,7 @@ const processRecord = async (record) => {
       timedOut: false,
     };
 
-    await putStudentResult({
+    const previousStatus = await putStudentResult({
       jobId,
       classId,
       assignmentId,
@@ -614,8 +692,8 @@ const processRecord = async (record) => {
       classId,
       assignmentId,
       totalStudents,
-      completedDelta: 1,
-      failedDelta: 0,
+      previousStatus,
+      nextStatus: "completed",
     });
 
     console.info(
@@ -627,6 +705,8 @@ const processRecord = async (record) => {
         lessonNumber,
         forceRefresh,
         studentId: student.id,
+        attemptNumber,
+        maxReceiveCount,
         source,
         timing,
       }),
@@ -645,13 +725,14 @@ const processRecord = async (record) => {
         : error instanceof Error
           ? error.message
           : "Failed to analyze student.";
+    const nextStatus = finalAttempt ? "failed" : "retrying";
 
-    await putStudentResult({
+    const previousStatus = await putStudentResult({
       jobId: payload.jobId,
       classId: payload.classId,
       assignmentId: payload.assignmentId,
       student: payload.student,
-      status: "failed",
+      status: nextStatus,
       source,
       timing,
       error: message,
@@ -662,8 +743,8 @@ const processRecord = async (record) => {
       classId: payload.classId,
       assignmentId: payload.assignmentId,
       totalStudents: payload.totalStudents,
-      completedDelta: 0,
-      failedDelta: 1,
+      previousStatus,
+      nextStatus,
     });
 
     console.error(
@@ -675,6 +756,10 @@ const processRecord = async (record) => {
         lessonNumber: payload.lessonNumber,
         forceRefresh: payload.forceRefresh,
         studentId: payload.student.id,
+        attemptNumber,
+        maxReceiveCount,
+        finalAttempt,
+        status: nextStatus,
         error: message,
         timing,
       }),

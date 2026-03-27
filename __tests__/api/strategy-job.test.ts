@@ -265,6 +265,68 @@ describe("GET /api/strategy-job/[jobId]", () => {
         error: "Request timed out.",
       },
     ]);
+    expect(data.retrying).toEqual([]);
+    expect(data.distribution).toEqual({ analogy: 1 });
+  });
+
+  it("returns retrying students separately from final failures", async () => {
+    getCohortJob.mockResolvedValue({
+      job: {
+        job_id: "job-456",
+        class_id: "class-1",
+        assignment_id: "assignment-1",
+        total_students: 2,
+        processed_students: 1,
+        completed_students: 1,
+        failed_students: 0,
+        status: "running",
+        error_message: undefined,
+        created_at: "2026-03-25T00:00:00.000Z",
+        updated_at: "2026-03-25T00:00:45.000Z",
+      },
+      students: [
+        {
+          job_id: "job-456",
+          class_id: "class-1",
+          assignment_id: "assignment-1",
+          student_id: "student-1",
+          student_name: "Ava",
+          status: "completed",
+          source: "model",
+          plan_json: JSON.stringify({
+            strategy: "Analogy",
+            summary: "Use analogy.",
+          }),
+          updated_at: "2026-03-25T00:00:30.000Z",
+        },
+        {
+          job_id: "job-456",
+          class_id: "class-1",
+          assignment_id: "assignment-1",
+          student_id: "student-2",
+          student_name: "Jon",
+          status: "retrying",
+          error: "Strategy generation timed out before the model returned.",
+          updated_at: "2026-03-25T00:00:45.000Z",
+        },
+      ],
+    });
+
+    const res = await GET(
+      new Request("http://localhost:3000/api/strategy-job/job-456"),
+      { params: Promise.resolve({ jobId: "job-456" }) },
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.errors).toEqual([]);
+    expect(data.retrying).toEqual([
+      {
+        id: "student-2",
+        name: "Jon",
+        error: "Strategy generation timed out before the model returned.",
+      },
+    ]);
     expect(data.distribution).toEqual({ analogy: 1 });
   });
 });

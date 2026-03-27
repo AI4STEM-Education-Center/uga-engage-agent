@@ -60,6 +60,14 @@ export async function GET(
       error: student.error ?? "Failed to analyze student.",
     }));
 
+  const retrying = data.students
+    .filter((student) => student.status === "retrying")
+    .map((student) => ({
+      id: student.student_id,
+      name: student.student_name,
+      error: student.error ?? "Retrying student analysis.",
+    }));
+
   const distribution: Record<string, number> = {};
   results.forEach((result) => {
     if (!result.plan.strategy || typeof result.plan.strategy !== "string") {
@@ -85,6 +93,7 @@ export async function GET(
     },
     results,
     errors,
+    retrying,
     distribution,
   });
 }
