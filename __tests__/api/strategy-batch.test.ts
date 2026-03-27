@@ -255,6 +255,7 @@ describe("POST /api/strategy-batch", () => {
     ]));
 
     expect(firstRes.status).toBe(200);
+    expect(invalidateCachedPlanJson).not.toHaveBeenCalled();
     expect(createCompletion).toHaveBeenCalledTimes(1);
 
     createCompletion.mockReset();

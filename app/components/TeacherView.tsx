@@ -1243,7 +1243,7 @@ export default function TeacherView({ user }: Props) {
       total: studentAnswers.length,
       currentName: forceRefresh
         ? "Starting cohort reanalysis..."
-        : "Loading cache...",
+        : "Evaluating cached students...",
     });
 
     try {
