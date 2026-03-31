@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMedia, listMedia } from "@/lib/nosql";
+import { getMedia, listMedia, setActiveMediaVersion } from "@/lib/nosql";
 
 /**
  * GET /api/media
@@ -63,6 +63,44 @@ export async function GET(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Failed to retrieve media.";
     console.error("media route error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/media
+ *
+ * Switch the active version for a media record.
+ * Used when the teacher navigates image history.
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const { classId, assignmentId, studentId, contentItemId, mediaType, versionIndex } =
+      (await request.json()) as {
+        classId?: string;
+        assignmentId?: string;
+        studentId?: string;
+        contentItemId?: string;
+        mediaType?: "image" | "video";
+        versionIndex?: number;
+      };
+
+    if (!classId || !assignmentId || !studentId || !contentItemId || !mediaType || versionIndex === undefined) {
+      return NextResponse.json(
+        { error: "classId, assignmentId, studentId, contentItemId, mediaType, and versionIndex are required." },
+        { status: 400 },
+      );
+    }
+
+    const updated = await setActiveMediaVersion(classId, assignmentId, studentId, contentItemId, mediaType, versionIndex);
+    if (!updated) {
+      return NextResponse.json({ error: "Media record not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update active version.";
+    console.error("media PUT error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

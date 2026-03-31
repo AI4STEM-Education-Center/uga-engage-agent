@@ -12,6 +12,7 @@ import type {
   Plan,
   ContentItem,
   ImageState,
+  ImageVersion,
   VideoState,
   StudentStrategyResult,
   Lesson,
@@ -19,6 +20,8 @@ import type {
   StudentAnswer,
   TextMode,
 } from "@/lib/types";
+
+const MAX_IMAGE_VERSIONS = 10;
 
 type Props = {
   user: UserContext;
@@ -127,6 +130,31 @@ type PersistedDraft = {
 };
 
 
+// Survives component unmount/remount during SPA navigation; cleared on full page refresh.
+const imageHistoryCache = new Map<string, { history: ImageVersion[]; historyIndex: number }>();
+
+const COHORT_STUDENT_ID = "cohort";
+
+/** Merge cached/existing history into a restored ImageState. */
+const mergeImageWithHistory = (
+  itemId: string,
+  base: ImageState,
+  existingHistory?: ImageVersion[],
+  existingIndex?: number,
+): ImageState => {
+  const cached = imageHistoryCache.get(itemId);
+  const history = existingHistory?.length ? existingHistory : cached?.history;
+  const historyIndex = existingHistory?.length ? (existingIndex ?? 0) : cached?.historyIndex;
+
+  if (history?.length) {
+    return { ...base, history, historyIndex: historyIndex ?? 0, url: history[historyIndex ?? 0]?.url ?? base.url };
+  }
+  if (base.url) {
+    return { ...base, history: [{ url: base.url, createdAt: new Date().toISOString() }], historyIndex: 0 };
+  }
+  return base;
+};
+
 const LEGACY_DRAFT_STORAGE_KEY = "engage-agent:draft:v2";
 const DRAFT_STORAGE_PREFIX = "engage-agent:draft:v3";
 const DRAFT_VERSION = 2;
@@ -149,7 +177,12 @@ const trimPersistedImageState = (state: ImageState): ImageState | null => {
   }
 
   if (state.status === "ready" && state.url && !state.url.startsWith("data:")) {
-    return { status: "ready", url: state.url };
+    const trimmedHistory = state.history?.filter((v) => !v.url.startsWith("data:"));
+    return {
+      status: "ready",
+      url: state.url,
+      ...(trimmedHistory?.length ? { history: trimmedHistory, historyIndex: Math.min(state.historyIndex ?? 0, trimmedHistory.length - 1) } : {}),
+    };
   }
 
   return null;
@@ -339,6 +372,14 @@ export default function TeacherView({ user }: Props) {
   const [videos, setVideos] = useState<Record<string, VideoState>>({});
   const [focusImage, setFocusImage] = useState<{ url: string; title: string } | null>(null);
   const [focusVideo, setFocusVideo] = useState<{ url: string; title: string } | null>(null);
+
+  // Refine modal
+  const [refineTarget, setRefineTarget] = useState<{ itemId: string; title: string } | null>(null);
+  const [refinePrompt, setRefinePrompt] = useState("");
+  const [refineLoading, setRefineLoading] = useState(false);
+  const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const refineImgRef = useRef<HTMLImageElement>(null);
 
   // Content publishing
   const [selectedForPublish, setSelectedForPublish] = useState<Set<string>>(new Set());
@@ -637,7 +678,10 @@ export default function TeacherView({ user }: Props) {
                   state.status === "error" ||
                   (state.status === "ready" && Boolean(state.url))
                 ),
-            ),
+            ).map(([itemId, state]) => {
+              if (state.status === "ready") return [itemId, mergeImageWithHistory(itemId, state, state.history, state.historyIndex)];
+              return [itemId, state];
+            }),
           ) as Record<string, ImageState>;
           const restoredVideos = Object.fromEntries(
             Object.entries(draft.videos ?? {}).filter(
@@ -659,7 +703,14 @@ export default function TeacherView({ user }: Props) {
           setAnnotationReason(draft.annotationReason ?? "");
           setAnnotationStatus(draft.annotationStatus ?? "idle");
           setContent(restoredContent);
-          setImages(restoredImages);
+          const mergedImages = { ...restoredImages };
+          for (const item of restoredContent) {
+            if (!mergedImages[item.id]) {
+              const cached = imageHistoryCache.get(item.id);
+              if (cached) mergedImages[item.id] = mergeImageWithHistory(item.id, { status: "ready" });
+            }
+          }
+          setImages(mergedImages);
           setVideos(restoredVideos);
           setSelectedForPublish(new Set((draft.selectedForPublish ?? []).filter((itemId) => contentIds.has(itemId))));
           setPublishedContentIds(new Set((draft.publishedContentIds ?? []).filter((itemId) => contentIds.has(itemId))));
@@ -696,6 +747,15 @@ export default function TeacherView({ user }: Props) {
     persistDraftSnapshot(buildDraftSnapshot());
   }, [isHydrated, videos, buildDraftSnapshot, persistDraftSnapshot]);
 
+  // Sync image history to module-level cache so it survives SPA navigation
+  useEffect(() => {
+    for (const [itemId, state] of Object.entries(images)) {
+      if (state.history?.length) {
+        imageHistoryCache.set(itemId, { history: state.history, historyIndex: state.historyIndex ?? 0 });
+      }
+    }
+  }, [images]);
+
   // Restore persisted Step 3 media/publish state before any regeneration kicks in.
   useEffect(() => {
     if (!isRestoringDraftMedia || !content.length || !classId || !assignmentId) return;
@@ -706,7 +766,7 @@ export default function TeacherView({ user }: Props) {
     const restorePersistedStep3State = async () => {
       try {
         const [mediaRes, publishRes] = await Promise.all([
-          fetch(`/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`),
+          fetch(`/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${COHORT_STUDENT_ID}`),
           fetch(`/api/content-publish?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}`),
         ]);
 
@@ -728,14 +788,40 @@ export default function TeacherView({ user }: Props) {
             const itemId = record.content_item_id;
             if (!itemId || !contentIds.has(itemId) || !record.data_url) continue;
             if (record.media_type === "image") {
-              persistedImages[itemId] = { status: "ready", url: record.data_url };
+              // Build history from DB versions if available
+              const dbVersions = (record as { versions?: Array<{ data_url?: string; refinement_prompt?: string; created_at?: string }> }).versions;
+              const activeIdx = (record as { active_version?: number }).active_version;
+              if (dbVersions?.length) {
+                const history: ImageVersion[] = dbVersions
+                  .filter((v: { data_url?: string }) => v.data_url)
+                  .map((v: { data_url?: string; refinement_prompt?: string; created_at?: string }) => ({
+                    url: v.data_url!,
+                    refinementPrompt: v.refinement_prompt,
+                    createdAt: v.created_at ?? "",
+                  }));
+                const idx = Math.min(activeIdx ?? history.length - 1, history.length - 1);
+                persistedImages[itemId] = {
+                  status: "ready",
+                  url: history[idx]?.url ?? record.data_url,
+                  history,
+                  historyIndex: idx,
+                };
+              } else {
+                persistedImages[itemId] = { status: "ready", url: record.data_url };
+              }
             }
             if (record.media_type === "video") {
               persistedVideos[itemId] = { status: "ready", url: record.data_url };
             }
           }
 
-          setImages((prev) => ({ ...prev, ...persistedImages }));
+          setImages((prev) => {
+            const merged = { ...prev };
+            for (const [itemId, persisted] of Object.entries(persistedImages)) {
+              merged[itemId] = persisted;
+            }
+            return merged;
+          });
           setVideos((prev) => ({ ...prev, ...persistedVideos }));
         }
 
@@ -816,7 +902,7 @@ export default function TeacherView({ user }: Props) {
 
         const contentIds = new Set(restoredContent.map((item) => item.id));
         const mediaRes = await fetch(
-          `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=cohort`,
+          `/api/media?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${COHORT_STUDENT_ID}`,
         );
 
         if (cancelled) return;
@@ -860,7 +946,11 @@ export default function TeacherView({ user }: Props) {
         const publishedIds = restoredContent.map((item) => item.id);
 
         setContent(restoredContent);
-        setImages(restoredImages);
+        const imagesWithHistory: Record<string, ImageState> = {};
+        for (const [itemId, state] of Object.entries(restoredImages)) {
+          imagesWithHistory[itemId] = mergeImageWithHistory(itemId, state);
+        }
+        setImages(imagesWithHistory);
         setVideos(restoredVideos);
         setSelectedForPublish(new Set(publishedIds));
         setPublishedContentIds(new Set(publishedIds));
@@ -905,7 +995,7 @@ export default function TeacherView({ user }: Props) {
             contentItemId: itemId,
             classId,
             assignmentId,
-            studentId: "cohort",
+            studentId: COHORT_STUDENT_ID,
           });
           const res = await fetch(`/api/engagement-video/status?${params}`);
           const data = (await res.json()) as {
@@ -1234,6 +1324,7 @@ export default function TeacherView({ user }: Props) {
     setContent([]);
     setImages({});
     setVideos({});
+    imageHistoryCache.clear();
     setSelectedForPublish(new Set());
     setCohortResults([]);
     setCohortDistribution({});
@@ -1468,6 +1559,7 @@ export default function TeacherView({ user }: Props) {
       setContent(items);
       setImages({});
       setVideos({});
+      imageHistoryCache.clear();
       setSelectedForPublish(new Set());
       setCurrentStep(3);
     } catch (err) {
@@ -1586,7 +1678,7 @@ export default function TeacherView({ user }: Props) {
 
     setImages((prev) => {
       const next = { ...prev };
-      for (const item of pending) next[item.id] = { status: "loading" };
+      for (const item of pending) next[item.id] = { ...prev[item.id], status: "loading" };
       return next;
     });
 
@@ -1594,25 +1686,44 @@ export default function TeacherView({ user }: Props) {
     (async () => {
       for (const item of pending) {
         if (cancelled) break;
-        try {
-          const res = await fetch("/api/engagement-image", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              item,
-              lessonNumber: selectedLesson,
-              classId,
-              assignmentId,
-              studentId: "cohort",
-            }),
-          });
-          const text = await res.text();
-          let data: Record<string, unknown>;
-          try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
-          if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
-          if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "ready", url: data.url as string } }));
-        } catch (err) {
-          if (!cancelled) setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: err instanceof Error ? err.message : "Image failed." } }));
+        let lastError: Error | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const res = await fetch("/api/engagement-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item, lessonNumber: selectedLesson, classId, assignmentId, studentId: COHORT_STUDENT_ID }),
+            });
+            const text = await res.text();
+            let data: Record<string, unknown>;
+            try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+            if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
+            lastError = null;
+            if (!cancelled) {
+              const newUrl = data.url as string;
+              setImages((prev) => {
+                if (prev[item.id]?.history?.length) {
+                  return { ...prev, [item.id]: { ...prev[item.id], status: "ready", url: newUrl } };
+                }
+                return {
+                  ...prev,
+                  [item.id]: {
+                    status: "ready",
+                    url: newUrl,
+                    history: [{ url: newUrl, createdAt: new Date().toISOString() }],
+                    historyIndex: 0,
+                  },
+                };
+              });
+            }
+            break; // success — skip retry
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error("Image failed.");
+            // Retry once on timeout/network errors
+          }
+        }
+        if (lastError && !cancelled) {
+          setImages((prev) => ({ ...prev, [item.id]: { status: "error", error: lastError!.message } }));
         }
       }
     })();
@@ -1665,6 +1776,144 @@ export default function TeacherView({ user }: Props) {
       anchor.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
       anchor.download = filename;
       anchor.click();
+    }
+  };
+
+  const persistDebounceTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const persistActiveVersion = (itemId: string, versionIndex: number) => {
+    if (!classId || !assignmentId) return;
+    const timers = persistDebounceTimers.current;
+    const existing = timers.get(itemId);
+    if (existing) clearTimeout(existing);
+    timers.set(itemId, setTimeout(async () => {
+      timers.delete(itemId);
+      try {
+        await fetch("/api/media", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            classId,
+            assignmentId,
+            studentId: COHORT_STUDENT_ID,
+            contentItemId: itemId,
+            mediaType: "image",
+            versionIndex,
+          }),
+        });
+      } catch { /* best-effort */ }
+    }, 500));
+  };
+
+  const navigateImageVersion = (itemId: string, direction: "prev" | "next") => {
+    const current = images[itemId];
+    if (!current?.history?.length) return;
+    const currentIndex = current.historyIndex ?? (current.history.length - 1);
+    const newIndex = direction === "prev"
+      ? Math.max(0, currentIndex - 1)
+      : Math.min(current.history.length - 1, currentIndex + 1);
+    if (newIndex === currentIndex) return;
+    const newUrl = current.history[newIndex].url;
+    setImages((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        url: newUrl,
+        historyIndex: newIndex,
+      },
+    }));
+    persistActiveVersion(itemId, newIndex);
+  };
+
+  const [refineError, setRefineError] = useState<string | null>(null);
+
+  const generateAnnotatedImageDataUrl = async (): Promise<string | null> => {
+    const img = refineImgRef.current;
+    const imageUrl = images[refineTarget?.itemId ?? ""]?.url;
+    if (!img || !imageUrl || !selectionRect || selectionRect.w < 5 || selectionRect.h < 5) return null;
+
+    const response = await fetch(imageUrl.startsWith("data:") ? imageUrl : `/api/download?url=${encodeURIComponent(imageUrl)}`);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0);
+    const scaleX = bitmap.width / img.clientWidth;
+    const scaleY = bitmap.height / img.clientHeight;
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = Math.max(4, Math.round(bitmap.width / 150));
+    ctx.strokeRect(selectionRect.x * scaleX, selectionRect.y * scaleY, selectionRect.w * scaleX, selectionRect.h * scaleY);
+    return canvas.toDataURL("image/png");
+  };
+
+  const handleRefine = async () => {
+    if (!refineTarget || !refinePrompt.trim()) return;
+    const item = content.find((c) => c.id === refineTarget.itemId);
+    if (!item) return;
+
+    const currentImageUrl = images[refineTarget.itemId]?.url;
+    const annotatedImageUrl = await generateAnnotatedImageDataUrl();
+    setRefineLoading(true);
+    setRefineError(null);
+
+    try {
+      const res = await fetch("/api/engagement-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item,
+          plan,
+          answers: {},
+          classId,
+          assignmentId,
+          studentId: COHORT_STUDENT_ID,
+          refinementPrompt: refinePrompt.trim(),
+          previousImageUrl: currentImageUrl,
+          ...(annotatedImageUrl && { annotatedImageUrl }),
+        }),
+      });
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+      if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
+      setImages((prev) => {
+        const current = prev[refineTarget.itemId];
+        const existingHistory = current?.history ?? [];
+        // Truncate after current index if user refined from a non-latest version
+        const baseHistory = current?.historyIndex !== undefined
+          ? existingHistory.slice(0, current.historyIndex + 1)
+          : existingHistory;
+        const newVersion: ImageVersion = {
+          url: data.url as string,
+          refinementPrompt: refinePrompt.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        const newHistory = [...baseHistory, newVersion];
+        // Cap at MAX_IMAGE_VERSIONS — drop oldest entries
+        const cappedHistory = newHistory.length > MAX_IMAGE_VERSIONS
+          ? newHistory.slice(newHistory.length - MAX_IMAGE_VERSIONS)
+          : newHistory;
+        return {
+          ...prev,
+          [refineTarget.itemId]: {
+            status: "ready",
+            url: data.url as string,
+            history: cappedHistory,
+            historyIndex: cappedHistory.length - 1,
+          },
+        };
+      });
+      setRefinePrompt("");
+      setSelectionRect(null);
+    } catch (err) {
+      // Keep the current image intact — just show the error in the modal
+      setRefineError(err instanceof Error ? err.message : "Refine failed.");
+    } finally {
+      setRefineLoading(false);
     }
   };
 
@@ -2145,10 +2394,33 @@ export default function TeacherView({ user }: Props) {
                                   </div>
                                 )}
                               </div>
-                              <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => downloadFile(images[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`)}
-                                className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
-                                Save image
-                              </button>
+                              {(images[item.id]?.history?.length ?? 0) > 1 && (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button type="button" disabled={(images[item.id]?.historyIndex ?? 0) <= 0}
+                                    onClick={() => navigateImageVersion(item.id, "prev")}
+                                    className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                                    &#8592;
+                                  </button>
+                                  <span className="text-[10px] text-slate-500">
+                                    {(images[item.id]?.historyIndex ?? 0) + 1}/{images[item.id]?.history?.length ?? 0}
+                                  </span>
+                                  <button type="button" disabled={(images[item.id]?.historyIndex ?? 0) >= (images[item.id]?.history?.length ?? 1) - 1}
+                                    onClick={() => navigateImageVersion(item.id, "next")}
+                                    className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                                    &#8594;
+                                  </button>
+                                </div>
+                              )}
+                              <div className="flex w-full gap-1.5">
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => downloadFile(images[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-image.webp`)}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Save
+                                </button>
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); setSelectionRect(null); }}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Refine
+                                </button>
+                              </div>
                             </div>
                             <div className="flex w-32 shrink-0 flex-col gap-1.5 sm:w-36">
                               <div className="aspect-square w-full">
@@ -2176,10 +2448,16 @@ export default function TeacherView({ user }: Props) {
                                   </div>
                                 )}
                               </div>
-                              <button type="button" disabled={videos[item.id]?.status !== "ready"} onClick={() => downloadFile(videos[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-video.mp4`)}
-                                className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
-                                Save video
-                              </button>
+                              <div className="flex w-full gap-1.5">
+                                <button type="button" disabled={videos[item.id]?.status !== "ready"} onClick={() => downloadFile(videos[item.id]?.url ?? "", `${item.title.replace(/\s+/g, "-").toLowerCase()}-video.mp4`)}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Save
+                                </button>
+                                <button type="button" disabled={images[item.id]?.status !== "ready"} onClick={() => { setRefineTarget({ itemId: item.id, title: item.title }); setRefinePrompt(""); setRefineError(null); setSelectionRect(null); }}
+                                  className="flex w-1/2 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+                                  Refine
+                                </button>
+                              </div>
                             </div>
                           </div>
 
@@ -2244,6 +2522,142 @@ export default function TeacherView({ user }: Props) {
               <button type="button" className="absolute right-2 top-2 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow" onClick={() => setFocusVideo(null)}>Close</button>
               <video className="max-h-[80vh] w-full rounded-2xl bg-black shadow-2xl" src={focusVideo.url} controls autoPlay playsInline />
               <p className="mt-3 text-center text-sm text-slate-100">{focusVideo.title}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Refine image modal */}
+        {refineTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" onClick={() => { if (!refineLoading) setRefineTarget(null); }}>
+            <div className="relative flex w-full max-w-2xl flex-col gap-4 rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">Refine Image</h3>
+                <button type="button" disabled={refineLoading} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-300" onClick={() => setRefineTarget(null)}>Close</button>
+              </div>
+              <p className="text-sm text-slate-500">{refineTarget.title}</p>
+
+              {/* Image preview with region selection */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+                  {images[refineTarget.itemId]?.status === "ready" && images[refineTarget.itemId]?.url && (
+                    <div
+                      className="relative select-none"
+                      style={{ cursor: refineLoading ? "default" : "crosshair" }}
+                      onMouseDown={(e) => {
+                        if (refineLoading) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        setSelectionRect(null);
+                      }}
+                      onMouseMove={(e) => {
+                        if (!dragStart) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const curX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                        const curY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+                        setSelectionRect({
+                          x: Math.min(dragStart.x, curX),
+                          y: Math.min(dragStart.y, curY),
+                          w: Math.abs(curX - dragStart.x),
+                          h: Math.abs(curY - dragStart.y),
+                        });
+                      }}
+                      onMouseUp={() => {
+                        setDragStart(null);
+                        setSelectionRect((prev) => (prev && prev.w < 5 && prev.h < 5 ? null : prev));
+                      }}
+                      onMouseLeave={() => {
+                        if (dragStart) setDragStart(null);
+                      }}
+                    >
+                      <img
+                        ref={refineImgRef}
+                        className="block max-h-[40vh] rounded-xl"
+                        src={images[refineTarget.itemId]?.url}
+                        alt={refineTarget.title}
+                        draggable={false}
+                      />
+                      {selectionRect && selectionRect.w > 0 && selectionRect.h > 0 && (
+                        <svg className="pointer-events-none absolute inset-0 h-full w-full rounded-xl">
+                          <defs>
+                            <mask id="refine-selection-mask">
+                              <rect width="100%" height="100%" fill="white" />
+                              <rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="black" />
+                            </mask>
+                          </defs>
+                          <rect width="100%" height="100%" fill="rgba(0,0,0,0.4)" mask="url(#refine-selection-mask)" />
+                          <rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="none" stroke="#BA0C2F" strokeWidth="2" strokeDasharray="6 3" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                  {images[refineTarget.itemId]?.status === "loading" && (
+                    <div className="flex flex-col items-center gap-2 py-16">
+                      <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                      <p className="text-sm text-slate-400">Generating refined image...</p>
+                    </div>
+                  )}
+                  {images[refineTarget.itemId]?.status === "error" && (
+                    <p className="py-16 text-sm text-rose-500">{images[refineTarget.itemId]?.error}</p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <p>{selectionRect ? "Selected region will be refined. VLM will interpret the location." : "Drag on the image to select a region, or refine the entire image."}</p>
+                  {selectionRect && (
+                    <button type="button" onClick={() => setSelectionRect(null)} className="font-semibold text-rose-500 hover:text-rose-700">
+                      Clear selection
+                    </button>
+                  )}
+                </div>
+                {(images[refineTarget.itemId]?.history?.length ?? 0) > 1 && (
+                  <div className="flex items-center justify-center gap-3">
+                    <button type="button" disabled={refineLoading || (images[refineTarget.itemId]?.historyIndex ?? 0) <= 0}
+                      onClick={() => navigateImageVersion(refineTarget.itemId, "prev")}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                      &#8592; Prev
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      Version {(images[refineTarget.itemId]?.historyIndex ?? 0) + 1} of {images[refineTarget.itemId]?.history?.length ?? 0}
+                    </span>
+                    <button type="button" disabled={refineLoading || (images[refineTarget.itemId]?.historyIndex ?? 0) >= (images[refineTarget.itemId]?.history?.length ?? 1) - 1}
+                      onClick={() => navigateImageVersion(refineTarget.itemId, "next")}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                      Next &#8594;
+                    </button>
+                  </div>
+                )}
+                {images[refineTarget.itemId]?.history?.[images[refineTarget.itemId]?.historyIndex ?? 0]?.refinementPrompt && (
+                  <p className="text-center text-xs italic text-slate-400 truncate">
+                    Refined: &ldquo;{images[refineTarget.itemId]?.history?.[images[refineTarget.itemId]?.historyIndex ?? 0]?.refinementPrompt}&rdquo;
+                  </p>
+                )}
+              </div>
+
+              {/* Refinement input */}
+              {refineError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{refineError}</div>
+              )}
+              <div className="relative">
+                <textarea
+                  value={refinePrompt}
+                  onChange={(e) => { setRefinePrompt(e.target.value.slice(0, 500)); setRefineError(null); }}
+                  placeholder="Describe how you'd like to modify this image..."
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                />
+                <span className="absolute bottom-2 right-3 text-[10px] text-slate-400">{refinePrompt.length}/500</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3">
+                <button type="button" disabled={refineLoading} onClick={() => setRefineTarget(null)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">
+                  Cancel
+                </button>
+                <button type="button" disabled={refineLoading || !refinePrompt.trim()} onClick={handleRefine}
+                  className="rounded-full bg-[#BA0C2F] px-5 py-2 text-xs font-semibold text-white transition hover:bg-[#9a0a27] disabled:cursor-not-allowed disabled:bg-slate-400">
+                  {refineLoading ? "Regenerating..." : "Regenerate"}
+                </button>
+              </div>
             </div>
           </div>
         )}
