@@ -418,6 +418,8 @@ export default function TeacherView({ user }: Props) {
     };
   }, []);
 
+
+
   const getStrategyLabel = getEngagementStrategyLabel;
 
   const getStrategyDescription = getEngagementStrategyDescription;
