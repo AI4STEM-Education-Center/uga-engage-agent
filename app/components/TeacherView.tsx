@@ -1696,7 +1696,7 @@ export default function TeacherView({ user }: Props) {
             });
             const text = await res.text();
             let data: Record<string, unknown>;
-            try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+            try { data = JSON.parse(text); } catch { throw new Error(`Image request failed (${res.status}): ${text.slice(0, 120)}`); }
             if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
             lastError = null;
             if (!cancelled) {
@@ -1878,7 +1878,7 @@ export default function TeacherView({ user }: Props) {
       });
       const text = await res.text();
       let data: Record<string, unknown>;
-      try { data = JSON.parse(text); } catch { throw new Error("Image response was empty."); }
+      try { data = JSON.parse(text); } catch { throw new Error(`Image request failed (${res.status}): ${text.slice(0, 120)}`); }
       if (!res.ok) throw new Error((data?.error as string) ?? "Failed to generate image.");
       setImages((prev) => {
         const current = prev[refineTarget.itemId];

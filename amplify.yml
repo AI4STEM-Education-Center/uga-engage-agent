@@ -16,6 +16,7 @@ frontend:
         - echo "ENGAGE_AWS_SECRET_ACCESS_KEY=$ENGAGE_AWS_SECRET_ACCESS_KEY" >> .env.production
         - echo "COHORT_ANALYSIS_QUEUE_URL=$COHORT_ANALYSIS_QUEUE_URL" >> .env.production
         - echo "ENGAGE_S3_BUCKET=$ENGAGE_S3_BUCKET" >> .env.production
+        - echo "OPENAI_IMAGE_MODEL=$OPENAI_IMAGE_MODEL" >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
