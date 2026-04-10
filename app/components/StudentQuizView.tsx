@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { UserContext } from "@/lib/auth";
+import { findExistingStudentAnswer } from "@/lib/student-answer-lookup";
 import type { QuizItem } from "@/lib/types";
 
 type Props = {
@@ -75,14 +76,16 @@ export default function StudentQuizView({ user }: Props) {
       const lessonData = await lessonRes.json();
       setQuestions(lessonData.quiz_items ?? []);
 
-      // Check for existing answers
-      const answerRes = await fetch(
-        `/api/student-answers?classId=${encodeURIComponent(classId)}&assignmentId=${encodeURIComponent(assignmentId)}&studentId=${encodeURIComponent(user.userId)}&lessonNumber=${encodeURIComponent(qs.lesson_number)}`,
-      );
-      const answerData = await answerRes.json();
-      if (answerData.answer) {
-        setExistingAnswers(answerData.answer.answers);
-        setAnswers(answerData.answer.answers);
+      const existingAnswer = await findExistingStudentAnswer({
+        classId,
+        assignmentId,
+        lessonNumber: qs.lesson_number,
+        userId: user.userId,
+        email: user.email,
+      });
+      if (existingAnswer) {
+        setExistingAnswers(existingAnswer.answer.answers);
+        setAnswers(existingAnswer.answer.answers);
         setSubmitted(true);
         notifyQuizSubmitted(classId, assignmentId, user.userId);
       }
@@ -91,7 +94,7 @@ export default function StudentQuizView({ user }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [classId, assignmentId, user.userId]);
+  }, [classId, assignmentId, user.userId, user.email]);
 
   useEffect(() => {
     loadQuiz();

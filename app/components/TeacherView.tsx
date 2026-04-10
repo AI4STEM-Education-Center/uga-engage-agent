@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { UserContext } from "@/lib/auth";
+import { MOCK_USER_STORAGE_KEY, parseMockUserRole } from "@/lib/mock-auth";
 import {
   engagementStrategies as strategies,
   getEngagementStrategyDescription,
@@ -22,6 +23,7 @@ import type {
 } from "@/lib/types";
 
 const MAX_IMAGE_VERSIONS = 10;
+const SSO_TOKEN_STORAGE_KEY = "engage-sso-token";
 
 type Props = {
   user: UserContext;
@@ -361,6 +363,7 @@ export default function TeacherView({ user }: Props) {
   // Student answers
   const [studentAnswers, setStudentAnswers] = useState<StudentAnswer[]>([]);
   const [loadingAnswers, setLoadingAnswers] = useState(false);
+  const [autoAnsweringTestStudents, setAutoAnsweringTestStudents] = useState(false);
 
   // Plan
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -531,6 +534,60 @@ export default function TeacherView({ user }: Props) {
       distribution[result.plan.strategy] = (distribution[result.plan.strategy] ?? 0) + 1;
     });
     return distribution;
+  };
+
+  const autoAnswerTestStudents = async () => {
+    if (!classId || !assignmentId) {
+      setError("Missing class or assignment context.");
+      return;
+    }
+
+    setAutoAnsweringTestStudents(true);
+    setError(null);
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (typeof window !== "undefined") {
+        const token = window.sessionStorage.getItem(SSO_TOKEN_STORAGE_KEY);
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
+        const mockRole = parseMockUserRole(
+          window.sessionStorage.getItem(MOCK_USER_STORAGE_KEY),
+        );
+        if (mockRole) {
+          headers["x-engage-mock-user"] = mockRole;
+        }
+      }
+
+      const res = await fetch("/api/auto-answer-test-students", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ classId, assignmentId }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          (data as { error?: string }).error ??
+            "Failed to auto-answer test students.",
+        );
+      }
+
+      await loadStudentAnswers();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to auto-answer test students.",
+      );
+    } finally {
+      setAutoAnsweringTestStudents(false);
+    }
   };
 
   const buildCohortMasterPlan = (
@@ -2080,13 +2137,36 @@ export default function TeacherView({ user }: Props) {
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase text-slate-400">Student responses</p>
-                  <button type="button" onClick={() => void loadStudentAnswers()} disabled={loadingAnswers}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100">
-                    {loadingAnswers ? "Loading..." : "Refresh"}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void autoAnswerTestStudents()}
+                      disabled={
+                        autoAnsweringTestStudents ||
+                        quizStatus !== "published" ||
+                        !hasAssignmentContext
+                      }
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+                    >
+                      {autoAnsweringTestStudents
+                        ? "Generating..."
+                        : "Auto-answer 5 test students"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void loadStudentAnswers()}
+                      disabled={loadingAnswers}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+                    >
+                      {loadingAnswers ? "Loading..." : "Refresh"}
+                    </button>
+                  </div>
                 </div>
                 <p className="mt-2 text-sm text-slate-700">
                   <span className="font-semibold">{studentAnswers.length}</span> student{studentAnswers.length !== 1 ? "s" : ""} have answered so far.
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Generates stable random answers for the five configured test students and overwrites their prior submissions for this assignment.
                 </p>
                 {studentAnswers.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
