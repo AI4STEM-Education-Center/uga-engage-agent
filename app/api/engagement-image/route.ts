@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       annotatedImageUrl?: string;
     };
 
-    const model = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1.5";
+    const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
     const trimmedRefine = refinementPrompt?.trim().slice(0, MAX_REFINEMENT_PROMPT_LENGTH);
     const isRefine = !!(trimmedRefine && previousImageUrl);
 
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
         image: imageInput,
         prompt: editPrompt,
         size: "1024x1024",
-        quality: "high",
+        quality: "low",
         output_format: "webp",
       });
     } else {
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
         model,
         prompt,
         size: "1024x1024",
-        quality: "high",
+        quality: "low",
         output_format: "webp",
       });
     }
