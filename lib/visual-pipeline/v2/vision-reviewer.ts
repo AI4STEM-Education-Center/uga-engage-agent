@@ -16,37 +16,77 @@ import { z } from "zod";
 import type { SceneDescriptionV2 } from "./schema";
 import { checklistForArchetype } from "./vision-reviewer-checklists";
 
-export const SuggestedFix = z.union([
-  z.object({
-    kind: z.literal("scale"),
-    target: z.string(),
-    factor: z.number(),
-  }),
-  z.object({
-    kind: z.literal("reposition"),
-    target: z.string(),
-    to: z.enum(["above", "below", "left", "right", "center"]),
-  }),
-  z.object({
-    kind: z.literal("add_missing"),
-    element: z.string(),
-  }),
-  z.object({
-    kind: z.literal("remove"),
-    target: z.string(),
-  }),
-  z.object({
-    kind: z.literal("increase_margin"),
-  }),
-  z.object({
-    kind: z.literal("regenerate_scene"),
-    reason: z.string(),
-  }),
-  z.object({
-    kind: z.literal("other"),
-    note: z.string(),
-  }),
-]);
+const ScaleFix = z.object({
+  kind: z.literal("scale"),
+  target: z.string(),
+  factor: z.number(),
+});
+const RepositionFix = z.object({
+  kind: z.literal("reposition"),
+  target: z.string(),
+  to: z.enum(["above", "below", "left", "right", "center"]),
+});
+const AddMissingFix = z.object({
+  kind: z.literal("add_missing"),
+  element: z.string(),
+});
+const RemoveFix = z.object({
+  kind: z.literal("remove"),
+  target: z.string(),
+});
+const IncreaseMarginFix = z.object({ kind: z.literal("increase_margin") });
+const RegenerateSceneFix = z.object({
+  kind: z.literal("regenerate_scene"),
+  reason: z.string(),
+});
+const OtherFix = z.object({
+  kind: z.literal("other"),
+  note: z.string(),
+});
+
+// The reviewer sometimes returns "to" values outside the enum ("near A",
+// "correct opposite bodies", etc.). Coerce invalid reposition and any
+// unrecognized shapes to { kind: "other" } so schema validation doesn't
+// throw on otherwise-usable reports.
+export const SuggestedFix = z
+  .unknown()
+  .transform((val): unknown => {
+    if (!val || typeof val !== "object") return { kind: "other", note: String(val) };
+    const kind = (val as { kind?: unknown }).kind;
+    if (kind === "reposition") {
+      const parsed = RepositionFix.safeParse(val);
+      if (parsed.success) return parsed.data;
+      // Keep the idea but drop the invalid `to`.
+      const v = val as Record<string, unknown>;
+      return {
+        kind: "other",
+        note: `reposition ${String(v.target ?? "?")}: ${String(v.to ?? "?")}`,
+      };
+    }
+    for (const schema of [
+      ScaleFix,
+      AddMissingFix,
+      RemoveFix,
+      IncreaseMarginFix,
+      RegenerateSceneFix,
+      OtherFix,
+    ]) {
+      const p = schema.safeParse(val);
+      if (p.success) return p.data;
+    }
+    return { kind: "other", note: JSON.stringify(val).slice(0, 200) };
+  })
+  .pipe(
+    z.discriminatedUnion("kind", [
+      ScaleFix,
+      RepositionFix,
+      AddMissingFix,
+      RemoveFix,
+      IncreaseMarginFix,
+      RegenerateSceneFix,
+      OtherFix,
+    ]),
+  );
 export type SuggestedFix = z.infer<typeof SuggestedFix>;
 
 export const ReviewIssue = z.object({

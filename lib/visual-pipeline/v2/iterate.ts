@@ -144,7 +144,30 @@ export const iterateWithReview = async (
   const history: HistoryEntry[] = [];
 
   for (let iter = 0; iter < MAX_ITERATIONS + 1; iter++) {
-    const report = await reviewDiagram(deps.client, currentScene, currentPng);
+    let report: ReviewReport;
+    try {
+      report = await reviewDiagram(deps.client, currentScene, currentPng);
+    } catch (err) {
+      // Reviewer failures (bad JSON shape from gpt-4o, network, etc.) must
+      // not kill the whole pipeline. Skip review and proceed with current
+      // SVG. Stage 5 still runs; caller sees reviewPassed=false.
+      console.error(`[iterate] vision review failed on iter ${iter}: ${err}`);
+      return {
+        scene: currentScene,
+        layout: currentLayout,
+        svg: currentSvg,
+        rasterPng: currentPng,
+        finalReport: {
+          pass: false,
+          issues: [],
+          score: { structure: 3, labels: 3, physics: 3, aesthetics: 3, crop: 3 },
+          notes: "review unavailable — proceeded without feedback",
+        },
+        history,
+        reviewPassed: false,
+        regeneratedScene,
+      };
+    }
     const entry: HistoryEntry = { iteration: iter, report, appliedFixes: [] };
     history.push(entry);
     if (report.pass || iter >= MAX_ITERATIONS) {
