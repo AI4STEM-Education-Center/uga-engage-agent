@@ -36,14 +36,27 @@ const FREE_BODY = `For this FREE-BODY diagram, verify:
   7. Nothing cropped at the canvas edges.
   8. Labels do not overlap each other.`;
 
-const GENERIC_SCENE = `For this GENERIC-SCENE (non-physics-diagram):
-  1. A central subject placeholder with its label.
-  2. Any secondary placeholders with their labels at the stated positions.
-  3. Labels fit within the canvas and do not overlap.
-  4. Nothing cropped at the canvas edges.
-  NOTE: This archetype is a layout placeholder for GPT-image to render; the
-  physics-rigor bar from collision/free-body does not apply. Only flag
-  structural/layout issues.`;
+const GENERIC_SCENE = `For this GENERIC-SCENE (non-physics-diagram), reviewing a LAYOUT SCHEMATIC:
+
+  1. A central subject placeholder BLOCK is present.
+  2. Any secondary placeholder BLOCKS are at the stated positions (left /
+     right / below the subject).
+  3. Nothing cropped at the canvas edges.
+
+  IMPORTANT CONTEXT:
+  - This is a generic-scene archetype, NOT a physics diagram. The SVG
+    is INTENTIONALLY text-free: no labels, no title, no captions. The
+    reason is that any text baked into the reference SVG gets garbled
+    by GPT-image's restyle step (diffusion models cannot render text
+    reliably). The placeholders are pure position hints for GPT-image
+    to re-draw as a labeled scene.
+  - DO NOT flag "missing labels" / "missing title" as an issue. The
+    absence of text is the correct design.
+  - DO NOT compare against the scene JSON's subject.label or
+    secondaries[i].label for text legibility. Those labels are passed
+    to Stage 5 via the prompt, not rendered in the SVG.
+  - The physics-rigor bar does not apply. Only flag structural or
+    layout problems (missing placeholder, overlap, crop).`;
 
 export const checklistForArchetype = (archetype: Archetype): string => {
   switch (archetype) {

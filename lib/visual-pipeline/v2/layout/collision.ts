@@ -214,22 +214,31 @@ export const layoutCollision = (scene: SceneDescriptionV2): LayoutV2 => {
     role: "caption",
   });
 
-  // Equation caption at bottom.
-  const equationText =
-    col.caption_equation ??
-    col.annotations.find(
-      (a): a is Extract<typeof a, { kind: "equation" }> => a.kind === "equation",
-    )?.tex;
-  if (equationText) {
+  // Equation captions at bottom. Render caption_equation (the canonical
+  // law anchor, e.g. "F_AB = -F_BA") PLUS any equation annotations (e.g.
+  // scenario-specific: "KE_before - KE_after = E_def + E_heat"). They
+  // stack from the bottom up.
+  const equations: string[] = [];
+  if (col.caption_equation) equations.push(col.caption_equation);
+  for (const a of col.annotations) {
+    if (a.kind === "equation" && a.tex !== col.caption_equation) {
+      equations.push(a.tex);
+    }
+  }
+  const eqLineHeight = 24;
+  equations.forEach((text, idx) => {
+    // Stack from the bottom: last equation sits at y=H-36, earlier
+    // equations sit above it.
+    const y = H - 36 - (equations.length - 1 - idx) * eqLineHeight;
     labels.push({
-      id: "caption-equation",
-      text: equationText,
-      anchor: { x: W / 2, y: H - 36 },
+      id: `caption-equation-${idx}`,
+      text,
+      anchor: { x: W / 2, y },
       align: "center",
       size: 18,
       role: "equation",
     });
-  }
+  });
 
   const layout: LayoutV2 = {
     canvas: { width: W, height: H, background: BACKGROUND },
