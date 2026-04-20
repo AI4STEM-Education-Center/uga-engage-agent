@@ -1691,7 +1691,7 @@ export default function TeacherView({ user }: Props) {
         let lastError: Error | null = null;
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const res = await fetch("/api/engagement-image", {
+            const res = await fetch("/api/engagement-image-pipeline", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ item, lessonNumber: selectedLesson, classId, assignmentId, studentId: COHORT_STUDENT_ID }),
