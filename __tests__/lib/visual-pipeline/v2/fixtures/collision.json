@@ -1,0 +1,53 @@
+{
+  "title": "Newton's Third Law — Head-on Collision",
+  "lesson_concept": "Action-reaction force pair in a two-body collision",
+  "scene": {
+    "archetype": "collision",
+    "bodies": [
+      {
+        "id": "A",
+        "kind": "car",
+        "label": "Blue Car",
+        "color": "#3B82F6",
+        "mass_kg": 1200,
+        "velocity_ms": 15,
+        "direction": "right",
+        "role": "left"
+      },
+      {
+        "id": "B",
+        "kind": "car",
+        "label": "Red Car",
+        "color": "#EF4444",
+        "mass_kg": 1200,
+        "velocity_ms": 15,
+        "direction": "left",
+        "role": "right"
+      }
+    ],
+    "forces": [
+      {
+        "id": "F_AB",
+        "on": "B",
+        "by": "A",
+        "label": "F_AB",
+        "kind": "contact",
+        "direction": "right"
+      },
+      {
+        "id": "F_BA",
+        "on": "A",
+        "by": "B",
+        "label": "F_BA",
+        "kind": "contact",
+        "direction": "left"
+      }
+    ],
+    "contact": {
+      "kind": "spring",
+      "between": ["A", "B"]
+    },
+    "annotations": [],
+    "caption_equation": "F_{AB} = -F_{BA}"
+  }
+}

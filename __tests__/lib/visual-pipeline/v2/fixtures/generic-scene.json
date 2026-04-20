@@ -1,0 +1,13 @@
+{
+  "title": "Classroom Discussion — Comparing Predictions",
+  "lesson_concept": "Two students discussing an experiment",
+  "scene": {
+    "archetype": "generic-scene",
+    "subject": { "label": "Experiment setup", "kind": "apparatus" },
+    "secondaries": [
+      { "label": "Student A", "kind": "person", "position": "left" },
+      { "label": "Student B", "kind": "person", "position": "right" }
+    ],
+    "setting": "classroom"
+  }
+}

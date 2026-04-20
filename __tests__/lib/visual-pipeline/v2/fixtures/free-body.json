@@ -1,0 +1,52 @@
+{
+  "title": "Free-Body Diagram — Block on Ground",
+  "lesson_concept": "Forces acting on a stationary block",
+  "scene": {
+    "archetype": "free-body",
+    "body": {
+      "id": "block",
+      "kind": "block",
+      "label": "Block",
+      "color": "#F59E0B",
+      "mass_kg": 10
+    },
+    "forces": [
+      {
+        "id": "F_g",
+        "on": "block",
+        "label": "Fg",
+        "kind": "gravity",
+        "direction": "down",
+        "magnitude_N": 98
+      },
+      {
+        "id": "F_N",
+        "on": "block",
+        "label": "FN",
+        "kind": "normal",
+        "direction": "up",
+        "magnitude_N": 98
+      },
+      {
+        "id": "F_app",
+        "on": "block",
+        "label": "F_app",
+        "kind": "applied",
+        "direction": "right",
+        "magnitude_N": 50
+      },
+      {
+        "id": "F_fric",
+        "on": "block",
+        "label": "Ff",
+        "kind": "friction",
+        "direction": "left",
+        "magnitude_N": 50
+      }
+    ],
+    "surface": { "kind": "ground" },
+    "annotations": [
+      { "kind": "equation", "tex": "ΣF = 0", "position": "bottom" }
+    ]
+  }
+}
