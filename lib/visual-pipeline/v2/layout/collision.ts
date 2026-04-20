@@ -106,9 +106,14 @@ export const layoutCollision = (scene: SceneDescriptionV2): LayoutV2 => {
   // Force arrows — drawn above the bodies, outside/away from the contact.
   // Slide 4 convention: F_AB and F_BA point AWAY from the contact point
   // (since each body's force is opposite to its velocity — decelerating it).
+  // A collision diagram focuses on the action-reaction CONTACT pair; we
+  // deliberately skip gravity/normal forces (they balance out and clutter
+  // the Newton's Third Law visualization).
   const forceY = leftY - 46;
   const forceLen = 130;
-  const forces = col.forces.slice(0, 4);
+  const forces = col.forces
+    .filter((f) => f.kind === "contact" || f.kind === "spring")
+    .slice(0, 4);
   for (const f of forces) {
     const u = directionToUnit(f.direction);
     const onLeft = f.on === leftBody.id;
