@@ -39,6 +39,13 @@ export const layoutGenericScene = (scene: SceneDescriptionV2): LayoutV2 => {
   const bg =
     (gs.setting && BACKGROUND_BY_SETTING[gs.setting]) ?? BACKGROUND_BY_SETTING.classroom;
 
+  // Generic-scene intentionally renders ZERO text in the SVG — any text
+  // in the reference leaks into GPT-image's restyle and gets garbled
+  // ("SPEED, MASS, AND COLLSION ENER" etc). The reference is purely a
+  // position schematic for GPT-image to re-draw as a text-free scene.
+  // The Stage 5 prompt still receives the scene labels + lesson context
+  // so the model knows what to draw.
+
   // Central subject box.
   const subjectW = 260;
   const subjectH = 220;
@@ -52,14 +59,6 @@ export const layoutGenericScene = (scene: SceneDescriptionV2): LayoutV2 => {
     width: subjectW,
     height: subjectH,
     color: "#93C5FD",
-  });
-  labels.push({
-    id: "subject-label",
-    text: gs.subject.label,
-    anchor: { x: W / 2, y: sy + subjectH + 28 },
-    align: "center",
-    size: 17,
-    role: "label",
   });
 
   // Secondaries.
@@ -89,25 +88,7 @@ export const layoutGenericScene = (scene: SceneDescriptionV2): LayoutV2 => {
       height: h,
       color: "#BEF264",
     });
-    labels.push({
-      id: `sec-${s.label}-lbl`,
-      text: s.label,
-      anchor: { x: x + w / 2, y: y + h + 22 },
-      align: "center",
-      size: 14,
-      role: "label",
-    });
   }
-
-  // Title top.
-  labels.push({
-    id: "title",
-    text: scene.title,
-    anchor: { x: W / 2, y: 44 },
-    align: "center",
-    size: 22,
-    role: "caption",
-  });
 
   const layout: LayoutV2 = {
     canvas: { width: W, height: H, background: bg },
