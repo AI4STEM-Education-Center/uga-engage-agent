@@ -32,6 +32,9 @@ import { describeSceneV2 } from "../lib/visual-pipeline/v2/scene-describer-v2";
 import { computeLayoutV2 } from "../lib/visual-pipeline/v2/layout";
 import { buildSvgV2, rasterizeSvgV2 } from "../lib/visual-pipeline/v2/svg/build";
 import { SceneDescriptionV2 } from "../lib/visual-pipeline/v2/schema";
+import { iterateWithReview } from "../lib/visual-pipeline/v2/iterate";
+import { summarizeReport } from "../lib/visual-pipeline/v2/vision-reviewer";
+import { runVisualPipelineV2, dataUrlToBuffer } from "../lib/visual-pipeline/v2/orchestrator-v2";
 
 // ----------------------------------------------------------------------------
 // CLI arg parsing
@@ -222,6 +225,121 @@ const runStage2 = async (args: Args) => {
 };
 
 // ----------------------------------------------------------------------------
+// Phase C — Vision review + iterate loop
+// ----------------------------------------------------------------------------
+
+const runReview = async (client: OpenAI, args: Args) => {
+  if (!args.iter) throw new Error("review mode requires --iter=<existing iter>");
+  const dir = iterDir(args.iter);
+  const seedRaw = JSON.parse(
+    readFileSync(join(dir, "seed.json"), "utf-8"),
+  ) as { strategy: string; lessons: number[] };
+  const { strategy, lessons } = seedRaw;
+
+  for (let i = 0; i < lessons.length; i++) {
+    const lesson = lessons[i]!;
+    const key = caseKey(i, lesson, strategy);
+    const itemPath = join(dir, `${key}_item.json`);
+    const scenePath = join(dir, `${key}_scene.json`);
+    if (!existsSync(itemPath) || !existsSync(scenePath)) {
+      throw new Error(`Missing ${itemPath} or ${scenePath}; run content+scenes first.`);
+    }
+    const item = JSON.parse(readFileSync(itemPath, "utf-8")) as ResolvedContentItem & { id: string };
+    const scene = SceneDescriptionV2.parse(JSON.parse(readFileSync(scenePath, "utf-8")));
+
+    console.log(`[review] ${key} — iterate w/ vision review (max ${process.env.V2_MAX_ITER ?? 2})...`);
+    const result = await iterateWithReview(scene, { client, item, lessonNumber: lesson });
+
+    writeFileSync(join(dir, `${key}_layout.svg`), result.svg);
+    writeFileSync(join(dir, `${key}_reference.png`), result.rasterPng);
+    writeFileSync(
+      join(dir, `${key}_review.json`),
+      JSON.stringify(
+        {
+          scene: result.scene,
+          finalReport: result.finalReport,
+          history: result.history,
+          reviewPassed: result.reviewPassed,
+          regeneratedScene: result.regeneratedScene,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(`           → ${summarizeReport(result.finalReport)} iters=${result.history.length}`);
+  }
+  console.log(`\n[review] Done. ${dir}/`);
+};
+
+// ----------------------------------------------------------------------------
+// Phase D — end-to-end full pipeline (Stage 1..5)
+// ----------------------------------------------------------------------------
+
+const runFull = async (client: OpenAI, args: Args) => {
+  const { iter, seed, strategy, lessons } = resolveCases(args);
+  const dir = iterDir(iter);
+  ensureDir(dir);
+  writeFileSync(
+    join(dir, "seed.json"),
+    JSON.stringify({ iter, seed, strategy, lessons }, null, 2),
+  );
+  console.log(
+    `[full-v2] iter=${iter} seed=${seed} strategy=${strategy} lessons=${lessons.join(",")}`,
+  );
+
+  for (let i = 0; i < lessons.length; i++) {
+    const lesson = lessons[i]!;
+    const key = caseKey(i, lesson, strategy);
+    console.log(`[full-v2] ${key} — generating real content + running v2 pipeline...`);
+
+    const item = {
+      ...(await generateContentItem(client, lesson, strategy)),
+      id: key,
+    };
+    writeFileSync(join(dir, `${key}_item.json`), JSON.stringify(item, null, 2));
+
+    const result = await runVisualPipelineV2(client, item, lesson);
+
+    if (result.scene) {
+      writeFileSync(
+        join(dir, `${key}_scene.json`),
+        JSON.stringify(result.scene, null, 2),
+      );
+    }
+    if (result.svgDataUrl) {
+      const svg = Buffer.from(
+        result.svgDataUrl.split(",")[1] ?? "",
+        "base64",
+      ).toString("utf-8");
+      writeFileSync(join(dir, `${key}_layout.svg`), svg);
+    }
+    if (result.referencePng) {
+      writeFileSync(join(dir, `${key}_reference.png`), result.referencePng);
+    }
+    if (result.finalReport) {
+      writeFileSync(
+        join(dir, `${key}_review.json`),
+        JSON.stringify(
+          {
+            finalReport: result.finalReport,
+            reviewPassed: result.reviewPassed,
+            regeneratedScene: result.regeneratedScene,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+    writeFileSync(join(dir, `${key}_final.webp`), dataUrlToBuffer(result.url));
+
+    console.log(
+      `           → usedFallback=${result.usedFallback} reviewPassed=${result.reviewPassed} ${result.finalReport ? summarizeReport(result.finalReport) : ""}`,
+    );
+  }
+  console.log(`\n[full-v2] Done. ${dir}/`);
+};
+
+// ----------------------------------------------------------------------------
 // Main
 // ----------------------------------------------------------------------------
 
@@ -246,10 +364,15 @@ const main = async () => {
     case "stage2":
       await runStage2(args);
       break;
-    // review + full added when Stage 4/5 land.
+    case "review":
+      await runReview(client, args);
+      break;
+    case "full":
+      await runFull(client, args);
+      break;
     default:
       console.error(
-        `Unknown mode: ${args.mode}. Use: content | scenes | stage2 (review/full coming next).`,
+        `Unknown mode: ${args.mode}. Use: content | scenes | stage2 | review (full coming next).`,
       );
       process.exit(1);
   }
