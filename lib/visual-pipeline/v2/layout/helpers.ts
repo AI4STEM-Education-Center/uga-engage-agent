@@ -93,11 +93,14 @@ export type LayoutV2 = {
 // ---------------------------------------------------------------------------
 // Label collision resolution (simple axis-aligned nudge).
 //
-// Keeps labels inside canvas + non-overlapping. Approximation is fine —
-// the vision reviewer will flag remaining issues.
+// Two passes: label-vs-label AND label-vs-symbol. Symbol-overlap catches
+// the cases user reported: force/velocity arrows with labels sitting on
+// a body/block, or an equation caption that lands on a downward arrow.
 // ---------------------------------------------------------------------------
 
-const labelBounds = (l: PlacedLabel) => {
+type Rect = { x: number; y: number; w: number; h: number };
+
+const labelBounds = (l: PlacedLabel): Rect => {
   const approxWidth = l.text.length * l.size * 0.55;
   const approxHeight = l.size * 1.1;
   const x =
@@ -110,15 +113,38 @@ const labelBounds = (l: PlacedLabel) => {
   return { x, y, w: approxWidth, h: approxHeight };
 };
 
-const overlap = (a: ReturnType<typeof labelBounds>, b: ReturnType<typeof labelBounds>) =>
+// Treat each symbol as a bounding rect for overlap checks. Arrows/springs
+// are thin diagonals — approximate with their axis-aligned bbox plus a
+// small margin since labels shouldn't sit near the shaft either.
+const symbolBounds = (s: PlacedSymbol): Rect => {
+  if (s.kind === "arrow" || s.kind === "spring") {
+    const x = Math.min(s.x1, s.x2) - 4;
+    const y = Math.min(s.y1, s.y2) - 4;
+    const w = Math.abs(s.x2 - s.x1) + 8;
+    const h = Math.abs(s.y2 - s.y1) + 8;
+    return { x, y, w, h };
+  }
+  if (s.kind === "track") {
+    // thin line — don't over-claim space
+    return { x: s.x1, y: s.y - 3, w: s.x2 - s.x1, h: 6 };
+  }
+  return { x: s.x, y: s.y, w: s.width, h: s.height };
+};
+
+const overlap = (a: Rect, b: Rect) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
-export const resolveLabelPositions = (labels: PlacedLabel[]): PlacedLabel[] => {
+export const resolveLabelPositions = (
+  labels: PlacedLabel[],
+  symbols: PlacedSymbol[] = [],
+): PlacedLabel[] => {
   const out = labels.map((l) => ({ ...l }));
-  const maxPasses = 6;
+  const maxPasses = 8;
   const nudge = 14;
+  const symRects = symbols.map(symbolBounds);
   for (let pass = 0; pass < maxPasses; pass++) {
     let moved = false;
+    // label-vs-label
     for (let i = 0; i < out.length; i++) {
       for (let j = i + 1; j < out.length; j++) {
         const a = labelBounds(out[i]);
@@ -132,6 +158,23 @@ export const resolveLabelPositions = (labels: PlacedLabel[]): PlacedLabel[] => {
           }
           moved = true;
         }
+      }
+    }
+    // label-vs-symbol — push label away from the symbol along shortest axis.
+    for (let i = 0; i < out.length; i++) {
+      for (let k = 0; k < symRects.length; k++) {
+        const lr = labelBounds(out[i]);
+        const sr = symRects[k]!;
+        if (!overlap(lr, sr)) continue;
+        // Which direction requires the least movement to escape?
+        const pushDown = sr.y + sr.h - lr.y + 4;       // move label down to below symbol
+        const pushUp = lr.y + lr.h - sr.y + 4;          // move label up to above symbol
+        if (pushUp <= pushDown) {
+          out[i].anchor.y -= pushUp;
+        } else {
+          out[i].anchor.y += pushDown;
+        }
+        moved = true;
       }
     }
     if (!moved) break;

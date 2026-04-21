@@ -113,7 +113,7 @@ Style: clean, minimal, classroom-friendly.
 Hard requirement: the image must contain zero text of any kind.
 Do not render words, letters, numbers, equations, symbols, speech bubbles with text, captions, labels, posters, signs, UI text, or watermarks.`;
 
-  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5";
   const response = await client.images.generate({
     model,
     prompt,

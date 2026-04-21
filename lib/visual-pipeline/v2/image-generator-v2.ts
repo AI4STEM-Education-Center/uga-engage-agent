@@ -149,7 +149,11 @@ export const generateFromSvgV2 = async (
         preservedLabels: collectPreservedLabels(scene),
       });
 
-  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+  // Default to gpt-image-1.5 — OpenAI's current state-of-the-art image
+  // model. Compared to gpt-image-1 it has significantly better text
+  // rendering and reference-following, both of which matter for a
+  // pipeline that needs to preserve labels and arrow geometry verbatim.
+  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5";
   const quality = (process.env.OPENAI_IMAGE_QUALITY as "low" | "medium" | "high") ||
     (isGeneric ? "low" : "medium");
 

@@ -97,28 +97,65 @@ export const layoutFreeBody = (scene: SceneDescriptionV2): LayoutV2 => {
     role: "caption",
   });
 
-  // Body measurement below.
-  const measureY = (hasGround ? groundY : cy + bodySize / 2) + 36;
+  // Find which directions have forces so we can place labels where
+  // arrows are NOT drawn.
+  const dirHas = { up: false, down: false, left: false, right: false };
+  for (const f of fb.forces) {
+    const u = directionToUnit(f.direction);
+    if (Math.abs(u.dx) >= Math.abs(u.dy)) {
+      if (u.dx > 0) dirHas.right = true;
+      else if (u.dx < 0) dirHas.left = true;
+    } else {
+      if (u.dy > 0) dirHas.down = true;
+      else if (u.dy < 0) dirHas.up = true;
+    }
+  }
+
+  // Body measurement — pick a side that doesn't collide with force arrows.
+  // When all four sides have forces, place in a diagonal gap (below-right
+  // corner of the body) where arrow shafts don't reach.
   if (body.mass_kg !== undefined) {
+    const measureLabel = `m = ${body.mass_kg} kg`;
+    let mx: number, my: number;
+    if (!dirHas.down) {
+      mx = cx;
+      my = (hasGround ? groundY : cy + bodySize / 2) + 36;
+    } else if (!dirHas.up) {
+      mx = cx;
+      my = cy - bodySize / 2 - 16;
+    } else if (!dirHas.right) {
+      mx = cx + bodySize / 2 + 90;
+      my = cy;
+    } else if (!dirHas.left) {
+      mx = cx - bodySize / 2 - 90;
+      my = cy;
+    } else {
+      // All 4 cardinals taken — drop it in the below-right diagonal gap
+      // between the down and right arrows.
+      mx = cx + bodySize / 2 + 60;
+      my = cy + bodySize / 2 + 40;
+    }
     labels.push({
       id: `${body.id}-mass`,
-      text: `m = ${body.mass_kg} kg`,
-      anchor: { x: cx, y: measureY },
+      text: measureLabel,
+      anchor: { x: mx, y: my },
       align: "center",
       size: 15,
       role: "measurement",
     });
   }
 
-  // Equation caption if provided.
+  // Equation caption — prefer the bottom unless a downward force lives
+  // there, otherwise place above title row.
   const eq = fb.annotations.find(
     (a): a is Extract<typeof a, { kind: "equation" }> => a.kind === "equation",
   );
   if (eq) {
+    const eqY = dirHas.down ? 80 : H - 36;
     labels.push({
       id: "caption-equation",
       text: eq.tex,
-      anchor: { x: W / 2, y: H - 36 },
+      anchor: { x: W / 2, y: eqY },
       align: "center",
       size: 18,
       role: "equation",
@@ -133,6 +170,6 @@ export const layoutFreeBody = (scene: SceneDescriptionV2): LayoutV2 => {
   };
   return enforceCanvasMargins({
     ...layout,
-    labels: resolveLabelPositions(layout.labels),
+    labels: resolveLabelPositions(layout.labels, layout.symbols),
   });
 };

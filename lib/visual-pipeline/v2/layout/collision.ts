@@ -247,6 +247,6 @@ export const layoutCollision = (scene: SceneDescriptionV2): LayoutV2 => {
     archetype: "collision",
   };
 
-  const resolvedLabels = resolveLabelPositions(layout.labels);
+  const resolvedLabels = resolveLabelPositions(layout.labels, layout.symbols);
   return enforceCanvasMargins({ ...layout, labels: resolvedLabels });
 };
