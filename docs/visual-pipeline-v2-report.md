@@ -33,6 +33,7 @@ nothing hand-authored.
 | 3   | cognitive conflict   | 123  | 3.8   | 4.6   | 4.2   | 4.0   | 0/4       | stripped text from generic-scene SVG; reviewer now flagged it as "missing labels" (checklist mismatch) |
 | 4   | cognitive conflict   | 123  | pass  | pass  | pass  | fallback | 3/3      | reviewer checklist updated; 1 threw on malformed fix JSON (now fixed) |
 | 5   | experience bridging  | 777  | 4.8   | 4.2   | 5.0   | 5.0   | 3/4       | **stopping criteria met** (≥3/4 all-dim ≥4, 0 any ≤2), different strategy |
+| 6   | experience bridging  | 777  | 5.0   | 5.0   | 5.0   | 4.8   | **4/4**   | gpt-image-1.5 + SVG label-vs-symbol overlap fix; every label preserved verbatim through Stage 5 (subscripts, Δ, approximate signs) |
 
 **Stopping criteria**: iter5 meets them with a *different* strategy than
 the one it was tuned on, showing the pipeline generalises.
@@ -46,6 +47,8 @@ the one it was tuned on, showing the pipeline generalises.
 | 3 → 4 | generic-scene reviewer now scored "missing labels" blocker | Stage 4 | updated checklist: explain that text-free is the intended design, don't compare against scene JSON labels |
 | 3 → 4 | caseB dropped a secondary equation (KE_before - KE_after = ...) | Stage 2 | collision layout now stacks both caption_equation AND annotation equations |
 | 4 → 5 | reviewer returned invalid "reposition to" enum, whole pipeline threw | Stage 4 | SuggestedFix schema coerces invalid fixes to "other"; review failures become non-fatal (Stage 5 still runs) |
+| 5 → 6 | Stage 5 occasionally dropped arrows, garbled labels, drifted from SVG layout | Stage 5 | swapped default image model from gpt-image-1 to **gpt-image-1.5** (newer, better text rendering & reference-following; gpt-image-2 not on API yet as of 2026-04-21) |
+| 5 → 6 | SVG internal text overlap: mass label collided with gravity arrow; equation caption on arrow tip | Stage 2 | resolveLabelPositions now runs a second pass checking labels against symbol bboxes; free-body layout picks arrow-aware label slots (uses the below-right diagonal when all 4 cardinals are taken) |
 
 Tuning was always one-stage-at-a-time so I could attribute the delta.
 
