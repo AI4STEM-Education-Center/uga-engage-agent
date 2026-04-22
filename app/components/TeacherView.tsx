@@ -1596,14 +1596,29 @@ export default function TeacherView({ user }: Props) {
     setError(null);
     setContent([]);
     try {
-      const res = await fetch("/api/engagement-content", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lessonNumber: selectedLesson,
-          selectedStrategies,
-        }),
-      });
+      // Two-tier model strategy: first attempt uses the primary model
+      // (gpt-5-mini, higher quality). If it returns an error status — most
+      // commonly the Amplify 29s API Gateway 504 — retry once with
+      // `fallback: true`, which flips the route to gpt-4o-mini (p95 ~3s).
+      // Primary usually succeeds, so users almost never notice the retry;
+      // on the rare failure they wait a bit longer but still get content.
+      const callContent = (useFallback: boolean) =>
+        fetch("/api/engagement-content", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lessonNumber: selectedLesson,
+            selectedStrategies,
+            ...(useFallback ? { fallback: true } : {}),
+          }),
+        });
+      let res = await callContent(false);
+      if (!res.ok) {
+        console.warn(
+          `[engagement-content] primary attempt failed (HTTP ${res.status}); retrying with fallback model`,
+        );
+        res = await callContent(true);
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error((body as Record<string, string>)?.error ?? "Failed to generate content.");

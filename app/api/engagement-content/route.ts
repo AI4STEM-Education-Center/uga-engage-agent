@@ -100,9 +100,11 @@ export async function POST(request: Request) {
     const {
       lessonNumber,
       selectedStrategies = [],
+      fallback = false,
     } = (await request.json()) as {
       lessonNumber?: number;
       selectedStrategies?: string[];
+      fallback?: boolean;
     };
     if (typeof lessonNumber !== "number") {
       return NextResponse.json(
@@ -119,7 +121,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const model = process.env.OPENAI_MODEL ?? "gpt-5-nano";
+    // Two-tier model: primary (gpt-5-mini, higher quality but slower) runs by
+    // default. If the frontend's first attempt fails or times out on the
+    // Amplify 29s cap, it retries the same request with `fallback: true`,
+    // which swaps to gpt-4o-mini (p95 ~3s). Keeps the retry client-driven
+    // so the two attempts live in two separate HTTP requests — a single
+    // attempt that exceeds 29s has no way to deliver the fallback result
+    // back to the browser.
+    const primaryModel = process.env.OPENAI_MODEL ?? "gpt-5-mini";
+    const fallbackModel = process.env.OPENAI_FALLBACK_MODEL ?? "gpt-4o-mini";
+    const model = fallback ? fallbackModel : primaryModel;
+    if (fallback) {
+      console.log(`[engagement-content] fallback=true; using ${fallbackModel}`);
+    }
     const strategies = selectedStrategies.filter(Boolean);
     if (strategies.length === 0) {
       return NextResponse.json(
