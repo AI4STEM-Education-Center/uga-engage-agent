@@ -1621,6 +1621,149 @@ export const upsertContentRating = async (
   return input;
 };
 
+export type { StudentAnswerRecord, ContentPublishRecord, ContentRatingRecord, TeacherAnnotation, QuizStatusRecord };
+
+export const listAllTeacherAnnotations = async (): Promise<TeacherAnnotation[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new ScanCommand({
+        TableName: dynamoTableName,
+        FilterExpression: "#rt = :rt",
+        ExpressionAttributeNames: { "#rt": "record_type" },
+        ExpressionAttributeValues: { ":rt": "teacher_annotation" },
+      }),
+    );
+    return (result.Items ?? []).map((item) => ({
+      annotation_id: (item.annotation_id as string) ?? "",
+      student_name: (item.student_name as string) ?? null,
+      assignment: (item.assignment as string) ?? null,
+      overall_recommendation: (item.overall_recommendation as string) ?? "",
+      recommendation_reason: (item.recommendation_reason as string) ?? null,
+      decision: (item.decision as "agree" | "disagree") ?? "agree",
+      reason: (item.reason as string) ?? null,
+      ai_plan: (item.ai_plan as Record<string, unknown>) ?? {},
+      selected_strategies: (item.selected_strategies as string[]) ?? [],
+      answers: (item.answers as Record<string, string | undefined>) ?? {},
+      created_at: (item.created_at as string) ?? "",
+    }));
+  }
+  const store = await loadStore();
+  return store.teacher_annotations;
+};
+
+export const listAllStudentAnswers = async (): Promise<StudentAnswerRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new ScanCommand({
+        TableName: dynamoTableName,
+        FilterExpression: "#rt = :rt",
+        ExpressionAttributeNames: { "#rt": "record_type" },
+        ExpressionAttributeValues: { ":rt": "student_answer" },
+      }),
+    );
+    return (result.Items ?? []).map((item) => ({
+      class_id: (item.class_id as string) ?? "",
+      assignment_id: (item.assignment_id as string) ?? "",
+      student_id: toPlainStudentId(item.student_id as string),
+      student_name: (item.student_name as string) ?? "",
+      lesson_number: (item.lesson_number as number) ?? 0,
+      answers: (item.answers as Record<string, string>) ?? {},
+      submitted_at: (item.submitted_at as string) ?? "",
+    }));
+  }
+  const store = await loadStore();
+  return store.student_answers;
+};
+
+export const listAllCachedPlans = async (): Promise<CachedPlanRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new ScanCommand({
+        TableName: dynamoTableName,
+        FilterExpression: "#rt = :rt",
+        ExpressionAttributeNames: { "#rt": "record_type" },
+        ExpressionAttributeValues: { ":rt": "plan_cache" },
+      }),
+    );
+    return (result.Items ?? []).map((item) => ({
+      student_id: toPlainStudentId(item.student_id as string),
+      assignment_id: (item.assignment_id as string) ?? "",
+      class_id: (item.class_id as string) ?? "",
+      plan_json: (item.plan_json as string) ?? "",
+      updated_at: (item.updated_at as string) ?? "",
+    }));
+  }
+  const store = await loadStore();
+  const records: CachedPlanRecord[] = [];
+  for (const [sid, record] of Object.entries(store.strategy_cache)) {
+    records.push({
+      student_id: sid,
+      assignment_id: "",
+      class_id: "",
+      plan_json: record.plan_json,
+      updated_at: record.updated_at,
+    });
+  }
+  return records;
+};
+
+export const listAllPublishedContent = async (): Promise<ContentPublishRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new ScanCommand({
+        TableName: dynamoTableName,
+        FilterExpression: "#rt = :rt AND #pub = :pub",
+        ExpressionAttributeNames: { "#rt": "record_type", "#pub": "published" },
+        ExpressionAttributeValues: { ":rt": "content_publish", ":pub": true },
+      }),
+    );
+    return (result.Items ?? []).map((item) => ({
+      class_id: (item.class_id as string) ?? "",
+      assignment_id: (item.assignment_id as string) ?? "",
+      content_item_id: (item.content_item_id as string) ?? "",
+      content_json: (item.content_json as string) ?? "{}",
+      published: true,
+      published_at: (item.published_at as string) ?? "",
+      published_by: (item.published_by as string) ?? "",
+    }));
+  }
+  const store = await loadStore();
+  return store.content_publish.filter((c) => c.published);
+};
+
+export const listAllContentRatings = async (): Promise<ContentRatingRecord[]> => {
+  if (useDynamoDb) {
+    const client = getDynamoClient();
+    if (!client) return [];
+    const result = await client.send(
+      new ScanCommand({
+        TableName: dynamoTableName,
+        FilterExpression: "#rt = :rt",
+        ExpressionAttributeNames: { "#rt": "record_type" },
+        ExpressionAttributeValues: { ":rt": "content_rating" },
+      }),
+    );
+    return (result.Items ?? []).map((item) => ({
+      class_id: (item.class_id as string) ?? "",
+      assignment_id: (item.assignment_id as string) ?? "",
+      student_id: toPlainStudentId(item.student_id as string),
+      content_item_id: (item.content_item_id as string) ?? "",
+      rating: (item.rating as number) ?? 0,
+      rated_at: (item.rated_at as string) ?? "",
+    }));
+  }
+  const store = await loadStore();
+  return store.content_ratings;
+};
+
 export const listContentRatings = async (
   classId: string,
   assignmentId: string,
